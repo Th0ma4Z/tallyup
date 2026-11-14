@@ -1,0 +1,525 @@
+:root {
+  --bg: #f3f6f4;
+  --surface: #ffffff;
+  --text: #1b2620;
+  --muted: #5a6760;
+  --border: #d6dfda;
+  --primary: #1f7a5c;
+  --primary-text: #ffffff;
+  --win: #1b6e3c;
+  --loss: #b3261e;
+  --warning: #8a5300;
+  --radius: 12px;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111714;
+    --surface: #1a221e;
+    --text: #e6eee9;
+    --muted: #a2b0a8;
+    --border: #2f3b35;
+    --primary: #5cc79c;
+    --primary-text: #0b1a13;
+    --win: #6fd69a;
+    --loss: #ff8a80;
+    --warning: #ffbf5c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  /* 17px by default, in rem so a larger text setting enlarges everything. */
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  /* Room for the tab bar fixed at the bottom. */
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.app-header,
+.banners,
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.app-header {
+  padding-top: 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: min(1.6rem, 9vw);
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 10px;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.tagline {
+  margin: 2px 0 14px;
+  color: var(--muted);
+}
+
+main:focus {
+  outline: none;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 4px 0 8px;
+}
+
+label {
+  font-weight: 600;
+  display: block;
+  margin: 10px 0 4px;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+input[type="file"] {
+  font: inherit;
+  max-width: 100%;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  min-height: 44px;
+}
+
+.button-primary {
+  border: none;
+  background: var(--primary);
+  color: var(--primary-text);
+  font-weight: 600;
+  padding: 0 16px;
+}
+
+.button-secondary {
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.button-danger {
+  color: var(--loss);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.button-row > button {
+  flex: 1 1 auto;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.form-actions .button-primary {
+  flex: 1 1 auto;
+}
+
+.form-error {
+  color: var(--loss);
+  font-weight: 600;
+  margin: 10px 0 0;
+}
+
+.banner {
+  border: 1px solid var(--loss);
+  color: var(--loss);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+
+.banner p {
+  margin: 0 0 10px;
+}
+
+/* Date picker row: the date takes the space, the buttons stay tappable. */
+.date-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 6px;
+  align-items: center;
+}
+
+.date-row button {
+  padding: 0;
+}
+
+/* iPhone Safari gives date fields their own minimum width, which pushed this
+   one over the "next day" button; without its built-in look it fits the column. */
+.date-row input[type="date"] {
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.today-button {
+  margin-top: 8px;
+}
+
+.add-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.add-buttons button {
+  padding: 0 6px;
+}
+
+.amount-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.amount-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.amount-list .name {
+  overflow-wrap: anywhere;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.win {
+  color: var(--win);
+}
+
+.loss {
+  color: var(--loss);
+}
+
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.record {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.record-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.badge-type {
+  color: var(--primary);
+}
+
+.badge-muted {
+  color: var(--muted);
+}
+
+.record p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.record .button-row {
+  margin-top: 10px;
+}
+
+.transfer {
+  font-weight: 600;
+}
+
+.day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.day-list button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.day-list button[aria-current="date"] {
+  border: 2px solid var(--primary);
+}
+
+.undo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  border: 1px solid var(--primary);
+}
+
+.undo-bar p {
+  margin: 0;
+}
+
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.member-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.add-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+/* The pop-up form for a record. */
+dialog {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.player-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.player-row .player-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.player-row input {
+  grid-column: 1 / -1;
+}
+
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.choice-group legend {
+  font-weight: 600;
+  padding: 0;
+  margin: 10px 0 4px;
+}
+
+/* A radio or checkbox shown as a 44px tappable chip. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-weight: 400;
+  margin: 0;
+  cursor: pointer;
+}
+
+.chip:has(input:checked) {
+  border: 2px solid var(--primary);
+  font-weight: 600;
+}
+
+.chip input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.live-note {
+  margin: 10px 0 0;
+  font-weight: 600;
+}
+
+.live-note.is-off {
+  color: var(--warning);
+}
+
+.share-text {
+  width: 100%;
+  min-height: 120px;
+  font: inherit;
+  padding: 8px;
+}
+
+/* Bottom tab bar, reachable with a thumb. */
+.tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  gap: 4px;
+}
+
+/* Shrinks a little on very narrow screens so longer words, like the Spanish
+   "Registros", fit in a quarter of a 320px screen. */
+.tabs button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: min(0.95rem, 3.9vw);
+  padding: 0 2px;
+}
+
+.tabs button[aria-current="page"] {
+  color: var(--primary);
+  font-weight: 700;
+  background: var(--bg);
+}
+
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  width: fit-content;
+  max-width: 608px;
+  margin: 0 auto;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.toast.is-visible {
+  opacity: 1;
+}

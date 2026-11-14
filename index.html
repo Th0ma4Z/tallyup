@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f7a5c" />
+    <title>TallyUp 记账本</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1 id="app-name">TallyUp 记账本</h1>
+      <p id="tagline" class="tagline"></p>
+    </header>
+
+    <div class="banners">
+      <p id="banner" class="banner" role="alert" hidden></p>
+      <div id="stale" class="banner" role="alert" hidden>
+        <p id="stale-text"></p>
+        <button type="button" id="stale-reload" class="button-secondary"></button>
+      </div>
+    </div>
+
+    <!-- The current tab is drawn here by app.js. -->
+    <main id="view" tabindex="-1"></main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <nav class="tabs" id="tabs">
+      <button type="button" data-tab="records"></button>
+      <button type="button" data-tab="settle"></button>
+      <button type="button" data-tab="people"></button>
+      <button type="button" data-tab="more"></button>
+    </nav>
+
+    <dialog id="record-dialog" aria-labelledby="record-dialog-title">
+      <form id="record-form" novalidate>
+        <h2 id="record-dialog-title"></h2>
+        <div id="record-fields"></div>
+        <p id="record-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button type="submit" class="button-primary" id="record-save"></button>
+          <button type="button" class="button-secondary" id="record-cancel"></button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="rename-dialog" aria-labelledby="rename-title">
+      <form id="rename-form" novalidate>
+        <h2 id="rename-title"></h2>
+        <label for="rename-input" id="rename-label"></label>
+        <input id="rename-input" autocomplete="off" />
+        <p id="rename-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button type="submit" class="button-primary" id="rename-save"></button>
+          <button type="button" class="button-secondary" id="rename-cancel"></button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
