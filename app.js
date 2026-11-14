@@ -96,6 +96,9 @@ function start() {
   recordForm.addEventListener("submit", saveRecordFromForm);
   recordForm.addEventListener("input", updateLivePreview);
   recordForm.addEventListener("change", updateLivePreview);
+  // An error message goes away as soon as someone starts fixing it.
+  recordForm.addEventListener("input", () => (recordError.hidden = true));
+  renameInput.addEventListener("input", () => (renameError.hidden = true));
   document.getElementById("record-cancel").addEventListener("click", () => recordDialog.close());
   document.getElementById("rename-form").addEventListener("submit", saveRename);
   document.getElementById("rename-cancel").addEventListener("click", () => renameDialog.close());
@@ -900,7 +903,13 @@ function markAllSettled(missing) {
 
 function renderPeople() {
   const error = h("p", { class: "form-error", id: "member-error", role: "alert", hidden: true });
-  const input = h("input", { id: "member-input", autocomplete: "off", maxlength: "40", placeholder: t("memberPlaceholder") });
+  const input = h("input", {
+    id: "member-input",
+    autocomplete: "off",
+    maxlength: "40",
+    placeholder: t("memberPlaceholder"),
+    oninput: () => (error.hidden = true),
+  });
   const form = h(
     "form",
     { id: "member-form", novalidate: true, onsubmit: (event) => addMember(event, input, error) },
