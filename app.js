@@ -106,7 +106,24 @@ function start() {
   if (needsRates()) {
     refreshRates({ quiet: true });
   }
+  keepFilesForOffline();
   document.documentElement.dataset.appState = "ready";
+}
+
+// Lets the app open without internet (see sw.js). Only on a real web address:
+// the test pages load the app from text, where there's nothing to install.
+function keepFilesForOffline() {
+  if (!("serviceWorker" in navigator) || !window.location.protocol.startsWith("http")) {
+    return;
+  }
+  navigator.serviceWorker.register(new URL("sw.js", import.meta.url)).catch(() => {
+    // The app still works online without it.
+  });
+}
+
+// True when opened from the home screen icon rather than in the browser.
+function isHomeScreenApp() {
+  return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
 // ---------- Saving ----------
@@ -379,6 +396,18 @@ function renderRecords() {
         h("button", { type: "button", class: "button-primary", text: t("goToPeople"), onclick: () => goToTab("people") }),
       ),
     );
+    // On iPhone the home screen app starts empty even if Safari has records,
+    // so say where they are instead of letting it look like they're lost.
+    if (isHomeScreenApp() && book.members.length === 0 && book.records.length === 0) {
+      parts.push(
+        h(
+          "section",
+          { class: "card", id: "home-empty-hint" },
+          h("p", { text: t("homeEmptyHint") }),
+          h("button", { type: "button", class: "button-secondary", text: t("goRestore"), onclick: goToRestore }),
+        ),
+      );
+    }
   } else {
     parts.push(
       h(
@@ -451,6 +480,13 @@ function goToTab(name) {
   tab = name;
   render();
   view.focus();
+}
+
+function goToRestore() {
+  goToTab("more");
+  const restoreInput = document.getElementById("restore-input");
+  restoreInput.scrollIntoView({ block: "center" });
+  restoreInput.focus();
 }
 
 // A list of names with signed amounts in the main currency, biggest win first.
@@ -1047,6 +1083,14 @@ function renderMore() {
       h("h2", { id: "rates-heading", text: t("ratesTitle") }),
       h("p", { class: "hint", text: rates ? t("ratesFrom", { date: rates.date }) : t("ratesNone") }),
       h("button", { type: "button", class: "button-secondary", id: "rates-button", text: t("updateRates"), onclick: () => refreshRates() }),
+    ),
+    h(
+      "section",
+      { class: "card", id: "home-screen-card", "aria-labelledby": "home-heading" },
+      h("h2", { id: "home-heading", text: t("homeTitle") }),
+      ...(isHomeScreenApp()
+        ? [h("p", { class: "hint", text: t("homeInstalled") })]
+        : [h("p", { class: "hint", text: t("homeHowTo") }), h("p", { class: "hint", text: t("homeMoveData") })]),
     ),
     h(
       "section",

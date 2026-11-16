@@ -57,7 +57,8 @@ main {
 }
 
 .app-header {
-  padding-top: 20px;
+  /* Opened from the home screen, the page can reach under the status bar. */
+  padding-top: max(20px, env(safe-area-inset-top));
 }
 
 h1 {
