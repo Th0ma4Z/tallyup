@@ -216,6 +216,58 @@ export function settleUp(balances) {
   return transfers;
 }
 
+// The settle page's plan for the unsettled records, in the main currency:
+// { balances, transfers, missing }. A transfer marked refund: true is money
+// going back to someone who paid too much. That happens when a payment was
+// recorded and then the records changed (an AA share made smaller, or an AA
+// deleted): the payment stays, so the payer ends up owed money. Refunds go
+// back to the person they paid, as long as that doesn't take more transfers
+// than settleUp would; otherwise settleUp's shortest list is used.
+export function settlementPlan(records, currency, rates) {
+  const unsettled = records.filter((record) => !record.settled);
+  const { totals: balances, missing } = sumByMember(unsettled, recordBalances, currency, rates);
+  const shortest = settleUp(balances);
+  const refunds = refundTransfers(unsettled, balances, currency, rates);
+  if (!refunds.length) {
+    return { balances, transfers: shortest, missing };
+  }
+  const rest = { ...balances };
+  for (const refund of refunds) {
+    rest[refund.to] = roundMoney(rest[refund.to] - refund.amount);
+    rest[refund.from] = roundMoney(rest[refund.from] + refund.amount);
+  }
+  const withRefunds = [...refunds, ...settleUp(rest)];
+  return { balances, transfers: withRefunds.length <= shortest.length ? withRefunds : shortest, missing };
+}
+
+// Someone who is owed money and has paid someone else (net of anything paid
+// back) gets the smaller of the two back from the person they paid.
+function refundTransfers(unsettled, balances, currency, rates) {
+  const paid = new Map();
+  const add = (from, to, amount) => paid.set(`${from}\n${to}`, (paid.get(`${from}\n${to}`) ?? 0) + amount);
+  for (const record of unsettled) {
+    if (record.type !== "payment") {
+      continue;
+    }
+    const amount = convert(record.amount, record.currency, currency, rates);
+    if (amount !== null) {
+      add(record.fromId, record.toId, amount);
+      add(record.toId, record.fromId, -amount);
+    }
+  }
+  const owed = { ...balances };
+  const refunds = [];
+  for (const [pair, net] of paid) {
+    const [payer, receiver] = pair.split("\n");
+    const amount = roundMoney(Math.min(net, owed[payer] ?? 0));
+    if (amount >= 0.01) {
+      refunds.push({ from: receiver, to: payer, amount, refund: true });
+      owed[payer] = roundMoney(owed[payer] - amount);
+    }
+  }
+  return refunds;
+}
+
 export function cardTotal(amounts) {
   return roundMoney(Object.values(amounts).reduce((sum, amount) => sum + amount, 0));
 }

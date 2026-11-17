@@ -50,6 +50,16 @@
       </form>
     </dialog>
 
+    <!-- Before an AA edit or delete that changes what recorded payments leave owing. -->
+    <dialog id="impact-dialog" aria-labelledby="impact-title">
+      <h2 id="impact-title"></h2>
+      <div id="impact-body"></div>
+      <div class="form-actions">
+        <button type="button" class="button-primary" id="impact-confirm"></button>
+        <button type="button" class="button-secondary" id="impact-cancel"></button>
+      </div>
+    </dialog>
+
     <dialog id="rename-dialog" aria-labelledby="rename-title">
       <form id="rename-form" novalidate>
         <h2 id="rename-title"></h2>

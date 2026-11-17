@@ -9,11 +9,10 @@ import {
   memberIsUsed,
   parseAmount,
   parseBackup,
-  recordBalances,
   recordProblem,
   recordWinnings,
   roundMoney,
-  settleUp,
+  settlementPlan,
   splitSharesLeft,
   STORAGE_KEY,
   sumByMember,
@@ -38,6 +37,7 @@ const recordForm = document.getElementById("record-form");
 const recordFields = document.getElementById("record-fields");
 const recordError = document.getElementById("record-error");
 const renameDialog = document.getElementById("rename-dialog");
+const impactDialog = document.getElementById("impact-dialog");
 const renameInput = document.getElementById("rename-input");
 const renameError = document.getElementById("rename-error");
 
@@ -54,6 +54,8 @@ let editingRecord = null;
 let recordType = "card";
 let renamingId = null;
 let pendingRestore = null;
+// What to do if the payment-impact preview is confirmed.
+let pendingImpact = null;
 let toastTimer = null;
 
 start();
@@ -103,6 +105,14 @@ function start() {
   document.getElementById("record-cancel").addEventListener("click", () => recordDialog.close());
   document.getElementById("rename-form").addEventListener("submit", saveRename);
   document.getElementById("rename-cancel").addEventListener("click", () => renameDialog.close());
+  // Cancelling (or Esc) only closes the preview: nothing has been saved yet.
+  document.getElementById("impact-cancel").addEventListener("click", () => impactDialog.close());
+  document.getElementById("impact-confirm").addEventListener("click", () => {
+    const confirmed = pendingImpact;
+    impactDialog.close();
+    confirmed?.();
+  });
+  impactDialog.addEventListener("close", () => (pendingImpact = null));
   render();
   if (needsRates()) {
     refreshRates({ quiet: true });
@@ -612,12 +622,83 @@ function betTransferText(record) {
 }
 
 function deleteRecord(record) {
-  if (!window.confirm(t("deleteConfirm"))) {
+  const records = book.records.filter((other) => other.id !== record.id);
+  const finish = () => {
+    if (commit(withRecords(records), { undoMessage: t("deleted") })) {
+      document.getElementById("undo-button")?.focus();
+    }
+  };
+  // The preview asks instead of the plain question when payments are affected.
+  if (showPaymentImpact(record, null, records, finish)) {
     return;
   }
-  if (commit(withRecords(book.records.filter((other) => other.id !== record.id)), { undoMessage: t("deleted") })) {
-    document.getElementById("undo-button")?.focus();
+  if (window.confirm(t("deleteConfirm"))) {
+    finish();
   }
+}
+
+// ----- Payment impact preview -----
+
+// Payments aren't tied to a record: each one counts against the two people's
+// overall balances. So when an AA that involves someone with a recorded
+// payment is edited or deleted, the payments stay and the balances move; this
+// shows how, before anything is saved. Returns false (and shows nothing) when
+// no recorded payment is involved or nobody's balance changes.
+function showPaymentImpact(oldRecord, newRecord, nextRecords, onConfirm) {
+  if (oldRecord.type !== "split") {
+    return false;
+  }
+  const people = new Set([oldRecord, newRecord].filter(Boolean).flatMap((record) => [record.payerId, ...record.participantIds]));
+  const touchesPayment = book.records.some((record) => record.type === "payment" && !record.settled && (people.has(record.fromId) || people.has(record.toId)));
+  if (!touchesPayment) {
+    return false;
+  }
+  const currency = book.settings.currency;
+  const before = settlementPlan(book.records, currency, rates);
+  const after = settlementPlan(nextRecords, currency, rates);
+  const ids = book.members.map((member) => member.id).filter((id) => (before.balances[id] ?? 0) !== 0 || (after.balances[id] ?? 0) !== 0 || people.has(id));
+  if (ids.every((id) => Math.abs((before.balances[id] ?? 0) - (after.balances[id] ?? 0)) < 0.005)) {
+    return false;
+  }
+  document.getElementById("impact-title").textContent = t(newRecord ? "impactTitleEdit" : "impactTitleDelete");
+  document.getElementById("impact-confirm").textContent = t(newRecord ? "impactConfirmEdit" : "impactConfirmDelete");
+  document.getElementById("impact-cancel").textContent = t("cancel");
+  const hasRefund = after.transfers.some((transfer) => transfer.refund);
+  // replaceChildren would print an empty part as "null", so those are left out.
+  const parts = [
+    h("p", { class: "hint", text: t("impactHelp") }),
+    h(
+      "ul",
+      { class: "impact-list", id: "impact-people" },
+      ids.map((id) => {
+        const from = balanceText(before.balances[id] ?? 0);
+        const to = balanceText(after.balances[id] ?? 0);
+        return h("li", {}, h("span", { class: "name", text: nameOf(id) }), h("span", { text: from === to ? t("impactSame", { status: to }) : `${from} → ${to}` }));
+      }),
+    ),
+    h("h3", { text: t("impactPlanTitle") }),
+    missingNote([...new Set([...before.missing, ...after.missing])]),
+    hasRefund ? h("p", { class: "hint", text: t("impactRefundNote") }) : null,
+    after.transfers.length
+      ? h("ul", { class: "impact-list", id: "impact-plan" }, after.transfers.map((transfer) => h("li", { class: transfer.refund ? "refund" : null, text: transferText(transfer) })))
+      : h("p", { text: t("allSettled") }),
+  ];
+  document.getElementById("impact-body").replaceChildren(...parts.filter(Boolean));
+  pendingImpact = onConfirm;
+  impactDialog.showModal();
+  return true;
+}
+
+function balanceText(amount) {
+  if (amount >= 0.005) {
+    return t("isOwed", { amount: money(amount) });
+  }
+  return amount <= -0.005 ? t("owes", { amount: money(-amount) }) : t("even");
+}
+
+// "A 转给 B ¥30.00", or "A 退给 B ¥10.00" for a refund.
+function transferText(transfer) {
+  return t(transfer.refund ? "refunds" : "pays", { from: nameOf(transfer.from), to: nameOf(transfer.to), amount: money(transfer.amount) });
 }
 
 // ----- Record form -----
@@ -884,6 +965,13 @@ function saveRecordFromForm(event) {
   const records = editingRecord
     ? book.records.map((other) => (other.id === record.id ? record : other))
     : [...book.records, record];
+  if (editingRecord && showPaymentImpact(editingRecord, record, records, () => finishSave(record, records))) {
+    return;
+  }
+  finishSave(record, records);
+}
+
+function finishSave(record, records) {
   if (commit(withRecords(records), { message: t("saved") })) {
     selectedDate = record.date;
     recordDialog.close();
@@ -902,8 +990,7 @@ function saveRecordFromForm(event) {
 function renderSettle() {
   const currency = book.settings.currency;
   const unsettled = book.records.filter((record) => !record.settled);
-  const { totals: balances, missing } = sumByMember(unsettled, recordBalances, currency, rates);
-  const transfers = settleUp(balances);
+  const { balances, transfers, missing } = settlementPlan(book.records, currency, rates);
   const parts = [
     h(
       "section",
@@ -921,8 +1008,8 @@ function renderSettle() {
               const names = { from: nameOf(transfer.from), to: nameOf(transfer.to) };
               return h(
                 "li",
-                {},
-                h("span", { class: "name", text: t("payLine", names) }),
+                { class: transfer.refund ? "refund" : null },
+                h("span", { class: "name", text: t(transfer.refund ? "refundLine" : "payLine", names) }),
                 h("span", { class: "amount", text: amount }),
                 h("button", {
                   type: "button",
@@ -956,8 +1043,7 @@ function renderSettle() {
           { class: "amount-list" },
           book.members.map((member) => {
             const amount = balances[member.id] ?? 0;
-            const text = amount >= 0.005 ? t("isOwed", { amount: money(amount) }) : amount <= -0.005 ? t("owes", { amount: money(-amount) }) : t("even");
-            return h("li", {}, h("span", { class: "name", text: member.name }), h("span", { class: amountClass(amount), text }));
+            return h("li", {}, h("span", { class: "name", text: member.name }), h("span", { class: amountClass(amount), text: balanceText(amount) }));
           }),
         ),
       ),
@@ -982,7 +1068,7 @@ function settlementText(transfers) {
     lines.push(t("shareNothing"));
   }
   for (const transfer of transfers) {
-    lines.push(t("pays", { from: nameOf(transfer.from), to: nameOf(transfer.to), amount: money(transfer.amount) }));
+    lines.push(transferText(transfer));
   }
   return lines.join("\n");
 }
