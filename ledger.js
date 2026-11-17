@@ -385,20 +385,36 @@ export function splitSharesLeft(record) {
   return (Math.round(record.amount * 100) - given) / 100;
 }
 
+// Everyone a record involves.
+export function peopleIn(record) {
+  if (record.type === "card") {
+    return Object.keys(record.amounts);
+  }
+  if (record.type === "bet") {
+    return [record.bettorId, record.holderId];
+  }
+  if (record.type === "payment") {
+    return [record.fromId, record.toId];
+  }
+  return [record.payerId, ...record.participantIds];
+}
+
 // Whether a member appears in any record, so deleting them would break it.
 export function memberIsUsed(memberId, records) {
-  return records.some((record) => {
-    if (record.type === "card") {
-      return memberId in record.amounts;
-    }
-    if (record.type === "bet") {
-      return record.bettorId === memberId || record.holderId === memberId;
-    }
-    if (record.type === "payment") {
-      return record.fromId === memberId || record.toId === memberId;
-    }
-    return record.payerId === memberId || record.participantIds.includes(memberId);
-  });
+  return records.some((record) => peopleIn(record).includes(memberId));
+}
+
+// The records matching a search, newest first. text matches the note or the
+// name of anyone in the record, ignoring case; type and memberId narrow it
+// down. Empty fields don't filter.
+export function filterRecords(records, members, { text = "", type = "", memberId = "" } = {}) {
+  const query = text.normalize("NFKC").trim().toLocaleLowerCase();
+  const names = new Map(members.map((member) => [member.id, member.name]));
+  const matchesText = (record) =>
+    [record.note ?? "", ...peopleIn(record).map((id) => names.get(id) ?? "")].some((field) => field.normalize("NFKC").toLocaleLowerCase().includes(query));
+  return records
+    .filter((record) => (!type || record.type === type) && (!memberId || peopleIn(record).includes(memberId)) && (!query || matchesText(record)))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // Reads a backup file. Returns { ok: true, book } or { ok: false, error }

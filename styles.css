@@ -737,3 +737,24 @@ dialog::backdrop {
 .month-bars .amount {
   text-align: right;
 }
+
+/* Search on the Records tab. */
+.search-open {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.search-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 10px;
+}
+
+.search-close {
+  margin-top: 14px;
+}
+
+.record-date {
+  font-weight: 600;
+  width: 100%;
+}

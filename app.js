@@ -3,6 +3,7 @@
 import {
   buildBackup,
   cardTotal,
+  filterRecords,
   isRealDate,
   loadBook,
   localDateKey,
@@ -50,6 +51,8 @@ let stale = false;
 let rates = null;
 let tab = "records";
 let selectedDate = localDateKey(new Date());
+// The search on the Records tab ({ text, type, memberId }), or null for the day view.
+let search = null;
 // The member whose history is open on the People tab, or null for the list.
 let viewingMemberId = null;
 // The state before the last delete, settle or restore, for Undo.
@@ -369,6 +372,9 @@ function undoLast() {
 // ----- Records tab -----
 
 function renderRecords() {
+  if (search) {
+    return renderSearch();
+  }
   const dayRecords = book.records.filter((record) => record.date === selectedDate);
   const parts = [];
   const dateInput = h("input", {
@@ -385,6 +391,7 @@ function renderRecords() {
     },
   });
   parts.push(
+    h("button", { type: "button", class: "button-secondary search-open", id: "search-open", text: t("searchOpen"), onclick: openSearch }),
     h(
       "section",
       { class: "card", "aria-labelledby": "day-heading" },
@@ -522,7 +529,67 @@ function missingNote(missing) {
   return missing.length ? h("p", { class: "hint", text: t("missingRates", { list: missing.join(", ") }) }) : null;
 }
 
-function renderRecord(record) {
+// ----- Search -----
+
+function openSearch() {
+  search = { text: "", type: "", memberId: "" };
+  render();
+  document.getElementById("search-text")?.focus();
+}
+
+function closeSearch() {
+  search = null;
+  render();
+  document.getElementById("search-open")?.focus();
+}
+
+// The search form stays as it is while typing; only the results are redrawn,
+// so the keyboard doesn't close.
+function renderSearch() {
+  const update = (field) => (event) => {
+    search = { ...search, [field]: event.target.value };
+    document.getElementById("search-results").replaceChildren(...searchResults());
+  };
+  const typeSelect = h(
+    "select",
+    { id: "search-type", onchange: update("type") },
+    [["", t("searchAll")], ["card", t("typeCard")], ["bet", t("typeBet")], ["split", t("typeSplit")], ["payment", t("typePayment")]].map(([value, label]) =>
+      h("option", { value, text: label, selected: value === search.type }),
+    ),
+  );
+  const personSelect = h(
+    "select",
+    { id: "search-person", onchange: update("memberId") },
+    h("option", { value: "", text: t("searchAll") }),
+    book.members.map((member) => h("option", { value: member.id, text: member.name, selected: member.id === search.memberId })),
+  );
+  return [
+    h(
+      "section",
+      { class: "card", "aria-labelledby": "search-heading" },
+      h("h2", { id: "search-heading", text: t("searchOpen") }),
+      h("p", { class: "hint", text: t("searchHint") }),
+      h("label", { for: "search-text", text: t("searchText") }),
+      h("input", { type: "search", id: "search-text", autocomplete: "off", placeholder: t("searchPlaceholder"), value: search.text, oninput: update("text") }),
+      h("div", { class: "search-filters" }, h("div", {}, h("label", { for: "search-type", text: t("searchType") }), typeSelect), h("div", {}, h("label", { for: "search-person", text: t("searchPerson") }), personSelect)),
+      h("button", { type: "button", class: "button-secondary search-close", id: "search-close", text: t("searchClose"), onclick: closeSearch }),
+    ),
+    h("div", { id: "search-results", "aria-live": "polite" }, ...searchResults()),
+  ];
+}
+
+function searchResults() {
+  const found = filterRecords(book.records, book.members, search);
+  if (!found.length) {
+    return [h("p", { class: "muted", id: "search-count", text: t("searchNone") })];
+  }
+  return [
+    h("p", { class: "muted", id: "search-count", text: t("searchCount", { n: found.length }) }),
+    h("ul", { class: "record-list" }, found.map((record) => renderRecord(record, { showDate: true }))),
+  ];
+}
+
+function renderRecord(record, { showDate = false } = {}) {
   const typeKey = { card: "typeCard", bet: "typeBet", split: "typeSplit", payment: "typePayment" }[record.type];
   const body = [];
   if (record.type === "card") {
@@ -584,6 +651,7 @@ function renderRecord(record) {
     h(
       "div",
       { class: "record-head" },
+      showDate ? h("span", { class: "record-date", text: longDate(record.date) }) : null,
       h("span", { class: "badge badge-type", text: t(typeKey) }),
       record.currency !== book.settings.currency ? h("span", { class: "badge badge-muted", text: record.currency }) : null,
       record.settled ? h("span", { class: "badge badge-muted", text: t("settledBadge") }) : null,
