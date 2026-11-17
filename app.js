@@ -509,7 +509,7 @@ function missingNote(missing) {
 }
 
 function renderRecord(record) {
-  const typeKey = { card: "typeCard", bet: "typeBet", split: "typeSplit" }[record.type];
+  const typeKey = { card: "typeCard", bet: "typeBet", split: "typeSplit", payment: "typePayment" }[record.type];
   const body = [];
   if (record.type === "card") {
     body.push(
@@ -535,6 +535,8 @@ function renderRecord(record) {
     const result = betResult(record);
     body.push(h("p", {}, h("span", { text: `${resultText(record)} · ` }), h("span", { class: amountClass(result), text: signedMoney(result, record.currency) })));
     body.push(h("p", { class: "transfer", text: betTransferText(record) }));
+  } else if (record.type === "payment") {
+    body.push(h("p", { text: t("paymentSummary", { from: nameOf(record.fromId), to: nameOf(record.toId), amount: money(record.amount, record.currency) }) }));
   } else if (record.shares) {
     body.push(h("p", { text: t("splitCustomSummary", { payer: nameOf(record.payerId), amount: money(record.amount, record.currency) }) }));
     body.push(
@@ -576,7 +578,10 @@ function renderRecord(record) {
     h(
       "div",
       { class: "button-row" },
-      h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${t(typeKey)}`, onclick: () => openRecordDialog(record.type, record) }),
+      // A payment is made from the settle page, so it can be deleted but not edited.
+      record.type === "payment"
+        ? null
+        : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${t(typeKey)}`, onclick: () => openRecordDialog(record.type, record) }),
       h("button", { type: "button", class: "button-secondary button-danger", text: t("delete"), "aria-label": `${t("delete")} ${t(typeKey)}`, onclick: () => deleteRecord(record) }),
     ),
   );
@@ -906,13 +911,28 @@ function renderSettle() {
       h("h2", { id: "settle-heading", text: t("settleTitle") }),
       h("p", { class: "hint", text: t("settleNote", { currency }) }),
       missingNote(missing),
+      transfers.length ? h("p", { class: "hint", text: t("paidHint") }) : null,
       transfers.length
         ? h(
             "ul",
-            { class: "amount-list", id: "transfer-list" },
-            transfers.map((transfer) =>
-              h("li", {}, h("span", { class: "name", text: t("payLine", { from: nameOf(transfer.from), to: nameOf(transfer.to) }) }), h("span", { class: "amount", text: money(transfer.amount) })),
-            ),
+            { class: "transfer-list", id: "transfer-list" },
+            transfers.map((transfer) => {
+              const amount = money(transfer.amount);
+              const names = { from: nameOf(transfer.from), to: nameOf(transfer.to) };
+              return h(
+                "li",
+                {},
+                h("span", { class: "name", text: t("payLine", names) }),
+                h("span", { class: "amount", text: amount }),
+                h("button", {
+                  type: "button",
+                  class: "button-secondary paid-button",
+                  text: t("paidButton"),
+                  "aria-label": t("paidButtonLabel", { ...names, amount }),
+                  onclick: () => markPaid(transfer),
+                }),
+              );
+            }),
           )
         : h("p", { text: t("allSettled") }),
       h(
@@ -993,6 +1013,24 @@ async function shareSettlement(transfers) {
 
 // missing: currencies with no rate yet. Their records aren't in the transfers,
 // so settling now would drop what they owe.
+// Records one transfer from the settle page as paid, as a payment record dated
+// today in the main currency, so only that line goes away.
+function markPaid(transfer) {
+  const payment = {
+    id: createId(),
+    type: "payment",
+    date: localDateKey(new Date()),
+    currency: book.settings.currency,
+    settled: false,
+    fromId: transfer.from,
+    toId: transfer.to,
+    amount: transfer.amount,
+  };
+  if (commit(withRecords([...book.records, payment]), { undoMessage: t("paymentSaved") })) {
+    document.getElementById("undo-button")?.focus();
+  }
+}
+
 function markAllSettled(missing) {
   if (missing.length) {
     const error = document.getElementById("settle-error");

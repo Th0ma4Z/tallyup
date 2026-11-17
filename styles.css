@@ -540,3 +540,35 @@ dialog::backdrop {
   overflow-wrap: break-word;
   min-width: 0;
 }
+
+/* Settle page: "A pays B" over the amount, with a Paid button on the right,
+   so names have the full width and don't break mid-word on a narrow phone. */
+.transfer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.transfer-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.transfer-list .name {
+  grid-column: 1;
+  overflow-wrap: break-word;
+}
+
+.transfer-list .amount {
+  grid-column: 1;
+}
+
+.paid-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 0 14px;
+}

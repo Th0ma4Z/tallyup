@@ -3,7 +3,7 @@
 
 export const STORAGE_KEY = "tallyup.v1";
 export const BACKUP_FORMAT = "tallyup-backup-1";
-export const RECORD_TYPES = ["card", "bet", "split"];
+export const RECORD_TYPES = ["card", "bet", "split", "payment"];
 export const BET_RESULTS = ["win", "lose", "cashout"];
 
 export function emptyBook() {
@@ -85,7 +85,8 @@ export function betResult({ stake, payout, result, cashout }) {
 }
 
 // Each member's win (+) or loss (-) from one record, in the record's
-// currency. An AA split is spending, not winning, so it counts for nobody.
+// currency. An AA split is spending and a payment is paying back, not
+// winning, so neither counts for anybody.
 export function recordWinnings(record) {
   if (record.type === "card") {
     return { ...record.amounts };
@@ -110,6 +111,11 @@ export function recordBalances(record) {
     }
     const result = betResult(record);
     return { [record.bettorId]: result, [record.holderId]: roundMoney(-result) };
+  }
+  // A payment ("已付" on the settle page): the payer has paid part of what
+  // they owe, so they owe that much less and the receiver is owed that much less.
+  if (record.type === "payment") {
+    return { [record.fromId]: record.amount, [record.toId]: roundMoney(-record.amount) };
   }
   // AA split: the payer is owed the whole amount, and each person in the
   // split owes their share (the payer too, if they're in it). Everything is
@@ -276,6 +282,12 @@ export function recordProblem(record, members) {
     }
     return null;
   }
+  if (record.type === "payment") {
+    if (!known.has(record.fromId) || !known.has(record.toId) || record.fromId === record.toId) {
+      return "paymentNeedPeople";
+    }
+    return isAmount(record.amount) && record.amount > 0 ? null : "needAmount";
+  }
   return "badType";
 }
 
@@ -312,6 +324,9 @@ export function memberIsUsed(memberId, records) {
     }
     if (record.type === "bet") {
       return record.bettorId === memberId || record.holderId === memberId;
+    }
+    if (record.type === "payment") {
+      return record.fromId === memberId || record.toId === memberId;
     }
     return record.payerId === memberId || record.participantIds.includes(memberId);
   });
