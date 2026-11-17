@@ -758,3 +758,7 @@ dialog::backdrop {
   font-weight: 600;
   width: 100%;
 }
+
+.share-day {
+  margin-top: 12px;
+}

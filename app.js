@@ -450,6 +450,10 @@ function renderRecords() {
       h("h2", { id: "day-results-heading", text: t("dayResults") }),
       amountList(totals, t("dayResultsEmpty")),
       missingNote(missing),
+      dayRecords.length
+        ? h("button", { type: "button", class: "button-secondary share-day", id: "share-day", text: t("shareDay"), onclick: () => shareText(dayShareText(selectedDate), "day-share-fallback") })
+        : null,
+      h("div", { id: "day-share-fallback" }),
     ),
   );
 
@@ -1221,6 +1225,55 @@ function renderMonthlyChart() {
   );
 }
 
+// One day for the group chat: each record, the day's wins and losses, and
+// who pays whom counting only that day's unsettled records.
+function dayShareText(day) {
+  const currency = book.settings.currency;
+  const records = book.records.filter((record) => record.date === day);
+  const { totals, missing } = sumByMember(records, recordWinnings, currency, rates);
+  const lines = [t("shareDayHeading", { date: longDate(day) }), ""];
+  for (const record of records) {
+    lines.push(`· ${recordShareLine(record)}`);
+  }
+  lines.push("", t("shareDayResults"));
+  const results = Object.entries(totals)
+    .filter(([, amount]) => Math.abs(amount) >= 0.005)
+    .sort((a, b) => b[1] - a[1]);
+  lines.push(...(results.length ? results.map(([id, amount]) => `${nameOf(id)} ${signedMoney(amount)}`) : [t("dayResultsEmpty")]));
+  const { transfers, missing: missingTransfers } = settlementPlan(records, currency, rates);
+  lines.push("", t("shareDayTransfers"), ...(transfers.length ? transfers.map(transferText) : [t("shareNothing")]));
+  const unconverted = [...new Set([...missing, ...missingTransfers])];
+  if (unconverted.length) {
+    lines.push("", t("missingRates", { list: unconverted.join(", ") }));
+  }
+  return lines.join("\n");
+}
+
+// One record as a line of text, in the record's own currency.
+function recordShareLine(record) {
+  const amountOf = (value) => money(value, record.currency);
+  let text;
+  if (record.type === "card") {
+    text = Object.entries(record.amounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, amount]) => `${nameOf(id)} ${signedMoney(amount, record.currency)}`)
+      .join(t("listSeparator"));
+  } else if (record.type === "bet") {
+    const summary = t("betSummary", { bettor: nameOf(record.bettorId), holder: nameOf(record.holderId), stake: amountOf(record.stake), payout: amountOf(record.payout) });
+    text = `${summary} · ${resultText(record)} ${signedMoney(betResult(record), record.currency)}`;
+  } else if (record.type === "payment") {
+    text = t("paymentSummary", { from: nameOf(record.fromId), to: nameOf(record.toId), amount: amountOf(record.amount) });
+  } else if (record.shares) {
+    const shares = Object.entries(record.shares).map(([id, share]) => `${nameOf(id)} ${amountOf(share)}`);
+    text = `${t("splitCustomSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount) })} (${shares.join(t("listSeparator"))})`;
+  } else {
+    text = t("splitSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount), n: record.participantIds.length, share: amountOf(roundMoney(record.amount / record.participantIds.length)) });
+  }
+  const typeKey = { card: "typeCard", bet: "typeBet", split: "typeSplit", payment: "typePayment" }[record.type];
+  const line = t("shareLine", { type: t(typeKey), text });
+  return record.note ? `${line} · ${record.note}` : line;
+}
+
 function settlementText(transfers) {
   const lines = [t("shareHeading", { date: longDate(localDateKey(new Date())) })];
   if (!transfers.length) {
@@ -1232,8 +1285,13 @@ function settlementText(transfers) {
   return lines.join("\n");
 }
 
-async function shareSettlement(transfers) {
-  const text = settlementText(transfers);
+function shareSettlement(transfers) {
+  return shareText(settlementText(transfers), "share-fallback");
+}
+
+// Opens the phone's share sheet, or copies the text; if neither is allowed,
+// shows it in a box under the button (fallbackId) to copy by hand.
+async function shareText(text, fallbackId) {
   if (navigator.share && /Mobi|iPhone|Android/i.test(navigator.userAgent)) {
     try {
       await navigator.share({ text });
@@ -1250,14 +1308,12 @@ async function shareSettlement(transfers) {
   } catch {
     // Clipboard blocked: show the text to copy by hand.
     const area = h("textarea", { class: "share-text", readonly: true, "aria-label": t("copyThis"), value: text });
-    document.getElementById("share-fallback").replaceChildren(h("p", { class: "hint", text: t("copyThis") }), area);
+    document.getElementById(fallbackId).replaceChildren(h("p", { class: "hint", text: t("copyThis") }), area);
     area.focus();
     area.select();
   }
 }
 
-// missing: currencies with no rate yet. Their records aren't in the transfers,
-// so settling now would drop what they owe.
 // Records one transfer from the settle page as paid, as a payment record dated
 // today in the main currency, so only that line goes away.
 function markPaid(transfer) {
@@ -1276,6 +1332,8 @@ function markPaid(transfer) {
   }
 }
 
+// missing: currencies with no rate yet. Their records aren't in the transfers,
+// so settling now would drop what they owe.
 function markAllSettled(missing) {
   if (missing.length) {
     const error = document.getElementById("settle-error");
