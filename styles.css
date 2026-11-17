@@ -524,3 +524,19 @@ dialog::backdrop {
 .toast.is-visible {
   opacity: 1;
 }
+
+/* Splitting by amount: a name and an amount box per person. */
+.share-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5rem, 8rem);
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* Names wrap between words, and split a word only if it can't fit at all. */
+.share-row label {
+  margin: 0;
+  overflow-wrap: break-word;
+  min-width: 0;
+}

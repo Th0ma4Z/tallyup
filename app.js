@@ -14,6 +14,7 @@ import {
   recordWinnings,
   roundMoney,
   settleUp,
+  splitSharesLeft,
   STORAGE_KEY,
   sumByMember,
   betResult,
@@ -534,6 +535,17 @@ function renderRecord(record) {
     const result = betResult(record);
     body.push(h("p", {}, h("span", { text: `${resultText(record)} · ` }), h("span", { class: amountClass(result), text: signedMoney(result, record.currency) })));
     body.push(h("p", { class: "transfer", text: betTransferText(record) }));
+  } else if (record.shares) {
+    body.push(h("p", { text: t("splitCustomSummary", { payer: nameOf(record.payerId), amount: money(record.amount, record.currency) }) }));
+    body.push(
+      h(
+        "ul",
+        { class: "amount-list" },
+        Object.entries(record.shares)
+          .sort((a, b) => b[1] - a[1])
+          .map(([id, share]) => h("li", {}, h("span", { class: "name", text: nameOf(id) }), h("span", { class: "amount", text: money(share, record.currency) }))),
+      ),
+    );
   } else {
     body.push(
       h("p", {
@@ -678,6 +690,33 @@ function openRecordDialog(type, existing = null) {
         h("legend", { text: t("participants") }),
         book.members.map((member) => chip("checkbox", "participant", member.id, member.name, included.has(member.id))),
       ),
+      h(
+        "fieldset",
+        { class: "choice-group" },
+        h("legend", { text: t("splitHow") }),
+        chip("radio", "splitMode", "equal", t("splitEqual"), !existing?.shares),
+        chip("radio", "splitMode", "custom", t("splitCustom"), Boolean(existing?.shares)),
+      ),
+      // One amount box per member; only the ticked people's boxes show.
+      h(
+        "div",
+        { id: "share-fields", hidden: !existing?.shares },
+        book.members.map((member) =>
+          h(
+            "div",
+            { class: "share-row", "data-member": member.id, hidden: !included.has(member.id) },
+            h("label", { for: `share-${member.id}`, text: member.name }),
+            h("input", {
+              id: `share-${member.id}`,
+              name: `share-${member.id}`,
+              inputmode: "decimal",
+              autocomplete: "off",
+              placeholder: "0",
+              value: amountForInput(existing?.shares?.[member.id]),
+            }),
+          ),
+        ),
+      ),
     );
   }
   fields.push(
@@ -749,6 +788,15 @@ function recordFromForm() {
     record.payerId = data.get("payer");
     record.amount = readAmount(data.get("amount"));
     record.participantIds = data.getAll("participant");
+    if (data.get("splitMode") === "custom") {
+      // A box left empty becomes NaN, which recordProblem reports.
+      record.shares = Object.fromEntries(
+        record.participantIds.map((id) => {
+          const text = String(data.get(`share-${id}`) ?? "").trim();
+          return [id, text === "" ? NaN : readAmount(text)];
+        }),
+      );
+    }
   }
   return record;
 }
@@ -776,7 +824,25 @@ function updateLivePreview() {
     document.getElementById("cashout-field").hidden = record.result !== "cashout";
     const ready = record.bettorId && record.holderId && record.stake > 0 && record.payout >= record.stake && record.result && (record.result !== "cashout" || record.cashout >= 0);
     note.textContent = ready ? `${t("preview")}${betTransferText(record)}` : "";
+  } else if (record.shares) {
+    updateShareFields(record);
+    const left = splitSharesLeft(record);
+    if (!(record.amount > 0) || !record.participantIds.length) {
+      note.textContent = "";
+    } else if (left > 0) {
+      note.classList.add("is-off");
+      note.textContent = t("splitSharesLeft", { amount: money(left, record.currency) });
+    } else if (left < 0) {
+      note.classList.add("is-off");
+      note.textContent = t("splitSharesOver", { amount: money(-left, record.currency) });
+    } else if (!Object.values(record.shares).every(Number.isFinite)) {
+      note.classList.add("is-off");
+      note.textContent = t("splitNeedShares");
+    } else {
+      note.textContent = `${t("preview")}${t("splitCustomSummary", { payer: record.payerId ? nameOf(record.payerId) : "?", amount: money(record.amount, record.currency) })}`;
+    }
   } else {
+    updateShareFields(record);
     const ready = record.amount > 0 && record.participantIds.length > 0;
     note.textContent = ready
       ? `${t("preview")}${t("splitSummary", {
@@ -786,6 +852,15 @@ function updateLivePreview() {
           share: money(roundMoney(record.amount / record.participantIds.length), record.currency),
         })}`
       : "";
+  }
+}
+
+// Shows the amount boxes only when splitting by amount, and only for the
+// people ticked.
+function updateShareFields(record) {
+  document.getElementById("share-fields").hidden = !record.shares;
+  for (const row of document.querySelectorAll(".share-row")) {
+    row.hidden = !record.participantIds.includes(row.dataset.member);
   }
 }
 

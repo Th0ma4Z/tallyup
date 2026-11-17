@@ -112,10 +112,22 @@ export function recordBalances(record) {
     return { [record.bettorId]: result, [record.holderId]: roundMoney(-result) };
   }
   // AA split: the payer is owed the whole amount, and each person in the
-  // split owes an equal share (the payer too, if they're in it). Shares are
-  // worked out in cents; a cent left over (100 three ways) goes to the payer
-  // first, so the others pay exactly the share shown and nothing is lost.
+  // split owes their share (the payer too, if they're in it). Everything is
+  // in cents so nothing is lost to rounding.
   const cents = Math.round(record.amount * 100);
+  if (record.shares) {
+    // Shares typed in by hand, which add up to the amount.
+    const balances = { [record.payerId]: cents };
+    for (const [id, share] of Object.entries(record.shares)) {
+      balances[id] = (balances[id] ?? 0) - Math.round(share * 100);
+    }
+    for (const id of Object.keys(balances)) {
+      balances[id] = balances[id] / 100;
+    }
+    return balances;
+  }
+  // Equal shares: a cent left over (100 three ways) goes to the payer first,
+  // so the others pay exactly the share shown.
   const people = [...record.participantIds].sort((a, b) => (b === record.payerId) - (a === record.payerId));
   const baseShare = Math.floor(cents / people.length);
   let leftover = cents - baseShare * people.length;
@@ -259,9 +271,37 @@ export function recordProblem(record, members) {
     if (!people.length || new Set(people).size !== people.length || !people.every((id) => known.has(id))) {
       return "splitNeedPeople";
     }
+    if (record.shares !== undefined) {
+      return splitSharesProblem(record);
+    }
     return null;
   }
   return "badType";
+}
+
+// For an AA split with an amount per person: everyone in the split has a
+// share, and the shares add up exactly to the amount.
+function splitSharesProblem(record) {
+  const shares = record.shares;
+  if (!shares || typeof shares !== "object" || Array.isArray(shares)) {
+    return "splitNeedShares";
+  }
+  const ids = Object.keys(shares);
+  if (ids.length !== record.participantIds.length || !record.participantIds.every((id) => id in shares)) {
+    return "splitNeedShares";
+  }
+  if (!Object.values(shares).every(isAmount)) {
+    return "splitNeedShares";
+  }
+  return splitSharesLeft(record) === 0 ? null : "splitSharesNotTotal";
+}
+
+// How much of an AA amount isn't given to anyone yet (negative when the
+// shares add up to more than the amount). Shares that aren't numbers yet
+// count as 0.
+export function splitSharesLeft(record) {
+  const given = Object.values(record.shares ?? {}).reduce((sum, share) => sum + (Number.isFinite(share) ? Math.round(share * 100) : 0), 0);
+  return (Math.round(record.amount * 100) - given) / 100;
 }
 
 // Whether a member appears in any record, so deleting them would break it.
