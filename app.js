@@ -826,14 +826,22 @@ function openRecordDialog(type, existing = null) {
     field("currency", t("currency"), currencySelect("f-currency", "currency", currency)),
   ];
   if (type === "card") {
+    // Start with the people in this game (when editing) or in the last card
+    // game; everyone else is one tap away.
+    const lastCard = [...book.records].reverse().find((record) => record.type === "card");
+    const players = new Set(Object.keys(existing?.amounts ?? lastCard?.amounts ?? {}));
+    const others = players.size ? book.members.filter((member) => !players.has(member.id)) : [];
     fields.push(h("p", { class: "hint", text: t("cardHint") }));
+    if (others.length && !existing) {
+      fields.push(h("p", { class: "hint", text: t("cardLastPlayers") }));
+    }
     for (const member of book.members) {
       const amount = existing?.amounts?.[member.id];
       const lost = amount < 0;
       fields.push(
         h(
           "div",
-          { class: "player-row", "data-member": member.id },
+          { class: "player-row", "data-member": member.id, hidden: others.includes(member) },
           h("span", { class: "player-name", id: `p-${member.id}`, text: member.name }),
           h(
             "div",
@@ -851,6 +859,22 @@ function openRecordDialog(type, existing = null) {
           }),
         ),
       );
+    }
+    if (others.length) {
+      const showOthers = h("button", {
+        type: "button",
+        class: "button-secondary show-others",
+        id: "show-others",
+        text: t("showOthers", { n: others.length }),
+        onclick: () => {
+          for (const row of recordFields.querySelectorAll(".player-row[hidden]")) {
+            row.hidden = false;
+          }
+          showOthers.remove();
+          recordFields.querySelector(`[name="amount-${CSS.escape(others[0].id)}"]`)?.focus();
+        },
+      });
+      fields.push(showOthers);
     }
   } else if (type === "bet") {
     const lastBet = [...book.records].reverse().find((record) => record.type === "bet");
@@ -874,7 +898,10 @@ function openRecordDialog(type, existing = null) {
       ),
     );
   } else {
-    const included = new Set(existing?.participantIds ?? book.members.map((member) => member.id));
+    // Ticked to start with: this split's people when editing, else the last
+    // split's, else everyone.
+    const lastSplit = [...book.records].reverse().find((record) => record.type === "split");
+    const included = new Set(existing?.participantIds ?? lastSplit?.participantIds ?? book.members.map((member) => member.id));
     fields.push(
       field("payer", t("payer"), memberSelect("f-payer", "payer", existing?.payerId ?? "")),
       field("amount", t("amount"), h("input", { id: "f-amount", name: "amount", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.amount) })),

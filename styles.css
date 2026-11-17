@@ -762,3 +762,8 @@ dialog::backdrop {
 .share-day {
   margin-top: 12px;
 }
+
+.show-others {
+  width: 100%;
+  margin-top: 10px;
+}
