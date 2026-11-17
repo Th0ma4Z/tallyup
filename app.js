@@ -594,7 +594,7 @@ function renderRecord(record) {
       // A payment is made from the settle page, so it can be deleted but not edited.
       record.type === "payment"
         ? null
-        : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${t(typeKey)}`, onclick: () => openRecordDialog(record.type, record) }),
+        : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${t(typeKey)}`, onclick: () => editRecord(record) }),
       h("button", { type: "button", class: "button-secondary button-danger", text: t("delete"), "aria-label": `${t("delete")} ${t(typeKey)}`, onclick: () => deleteRecord(record) }),
     ),
   );
@@ -624,6 +624,14 @@ function betTransferText(record) {
   return t("even");
 }
 
+function editRecord(record) {
+  if (record.settled) {
+    settledWarning(record, "settledEditHelp", t("keepEditing"), () => openRecordDialog(record.type, record));
+  } else {
+    openRecordDialog(record.type, record);
+  }
+}
+
 function deleteRecord(record) {
   const records = book.records.filter((other) => other.id !== record.id);
   const finish = () => {
@@ -631,6 +639,10 @@ function deleteRecord(record) {
       document.getElementById("undo-button")?.focus();
     }
   };
+  if (record.settled) {
+    settledWarning(record, "settledDeleteHelp", t("delete"), finish);
+    return;
+  }
   // The preview asks instead of the plain question when payments are affected.
   if (showPaymentImpact(record, null, records, finish)) {
     return;
@@ -663,11 +675,7 @@ function showPaymentImpact(oldRecord, newRecord, nextRecords, onConfirm) {
   if (ids.every((id) => Math.abs((before.balances[id] ?? 0) - (after.balances[id] ?? 0)) < 0.005)) {
     return false;
   }
-  document.getElementById("impact-title").textContent = t(newRecord ? "impactTitleEdit" : "impactTitleDelete");
-  document.getElementById("impact-confirm").textContent = t(newRecord ? "impactConfirmEdit" : "impactConfirmDelete");
-  document.getElementById("impact-cancel").textContent = t("cancel");
   const hasRefund = after.transfers.some((transfer) => transfer.refund);
-  // replaceChildren would print an empty part as "null", so those are left out.
   const parts = [
     h("p", { class: "hint", text: t("impactHelp") }),
     h(
@@ -686,10 +694,34 @@ function showPaymentImpact(oldRecord, newRecord, nextRecords, onConfirm) {
       ? h("ul", { class: "impact-list", id: "impact-plan" }, after.transfers.map((transfer) => h("li", { class: transfer.refund ? "refund" : null, text: transferText(transfer) })))
       : h("p", { text: t("allSettled") }),
   ];
+  showConfirm(t(newRecord ? "impactTitleEdit" : "impactTitleDelete"), parts, t(newRecord ? "impactConfirmEdit" : "impactConfirmDelete"), onConfirm);
+  return true;
+}
+
+// A question in a dialog with a confirm and a Cancel button. Cancel (or Esc)
+// only closes it; onConfirm runs only on confirm.
+function showConfirm(title, parts, confirmText, onConfirm) {
+  document.getElementById("impact-title").textContent = title;
+  document.getElementById("impact-confirm").textContent = confirmText;
+  document.getElementById("impact-cancel").textContent = t("cancel");
+  // replaceChildren would print an empty part as "null", so those are left out.
   document.getElementById("impact-body").replaceChildren(...parts.filter(Boolean));
   pendingImpact = onConfirm;
   impactDialog.showModal();
-  return true;
+}
+
+// Records marked settled are left out of the settle page, so changing one
+// changes nothing there. Says so before an edit or delete goes ahead.
+function settledWarning(record, helpKey, confirmText, onConfirm) {
+  showConfirm(
+    t("settledWarnTitle"),
+    [
+      isRealDate(record.settledOn) ? h("p", { text: t("settledOnDate", { date: longDate(record.settledOn) }) }) : null,
+      h("p", { class: "hint", text: t(helpKey) }),
+    ],
+    confirmText,
+    onConfirm,
+  );
 }
 
 function balanceText(amount) {
@@ -850,6 +882,10 @@ function recordFromForm() {
     currency: data.get("currency"),
     settled: editingRecord?.settled ?? false,
   };
+  if (editingRecord?.settledOn) {
+    // Editing a settled record keeps the day it was settled.
+    record.settledOn = editingRecord.settledOn;
+  }
   const note = String(data.get("note") ?? "").trim();
   if (note) {
     record.note = note;
