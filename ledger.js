@@ -186,6 +186,23 @@ export function sumByMember(records, pick, currency, rates) {
   return { totals, missing: [...missing] };
 }
 
+// Each month's wins and losses per member, in the main currency, newest
+// month first: [{ month: "2026-11", totals: { id: amount }, missing: [...] }].
+// Only cards and bets count, as in the overall totals; a month with no wins or
+// losses at all is left out.
+export function monthlyWinnings(records, currency, rates) {
+  const byMonth = new Map();
+  for (const record of records) {
+    const month = record.date.slice(0, 7);
+    byMonth.set(month, [...(byMonth.get(month) ?? []), record]);
+  }
+  return [...byMonth.keys()]
+    .sort()
+    .reverse()
+    .map((month) => ({ month, ...sumByMember(byMonth.get(month), recordWinnings, currency, rates) }))
+    .filter(({ totals }) => Object.values(totals).some((amount) => Math.abs(amount) >= 0.005));
+}
+
 // Turns balances (+ receive, - pay) into a short list of transfers: the
 // person who owes the most pays the person owed the most, and so on. Amounts
 // under half a cent are treated as settled.

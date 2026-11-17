@@ -7,6 +7,7 @@ import {
   loadBook,
   localDateKey,
   memberIsUsed,
+  monthlyWinnings,
   parseAmount,
   parseBackup,
   recordBalances,
@@ -1096,9 +1097,60 @@ function renderSettle() {
         amountList(totals, t("dayResultsEmpty")),
         missingNote(missingTotal),
       ),
+      renderMonthlyChart(),
     );
   }
-  return parts;
+  return parts.filter(Boolean);
+}
+
+// Each month's wins and losses as bars from a centre line: right and blue for
+// won, left and red for lost. Every bar has its amount beside it, so nothing
+// depends on colour alone or on hovering. One scale for all months.
+function renderMonthlyChart() {
+  const currency = book.settings.currency;
+  const months = monthlyWinnings(book.records, currency, rates);
+  if (!months.length) {
+    return null;
+  }
+  const largest = Math.max(...months.flatMap(({ totals }) => Object.values(totals).map(Math.abs)));
+  return h(
+    "section",
+    { class: "card", id: "monthly-chart", "aria-labelledby": "monthly-heading" },
+    h("h2", { id: "monthly-heading", text: t("monthlyTitle") }),
+    h("p", { class: "hint", text: t("monthlyHint", { currency }) }),
+    h("p", { class: "chart-legend", "aria-hidden": "true" }, h("span", { text: t("chartWin") }), h("span", { class: "legend-loss", text: t("chartLoss") })),
+    months.map(({ month, totals, missing }) => {
+      const [year, monthNumber] = month.split("-").map(Number);
+      const label = new Date(year, monthNumber - 1, 1).toLocaleDateString(locale(), { year: "numeric", month: "long" });
+      const rows = book.members
+        .map((member) => [member, totals[member.id] ?? 0])
+        .filter(([, amount]) => Math.abs(amount) >= 0.005)
+        .sort((a, b) => b[1] - a[1]);
+      return h(
+        "div",
+        { class: "month-block", "data-month": month },
+        h("h3", { text: label }),
+        h(
+          "ul",
+          { class: "month-bars" },
+          rows.map(([member, amount]) =>
+            h(
+              "li",
+              {},
+              h("span", { class: "name", text: member.name }),
+              h(
+                "span",
+                { class: "bar-track", "aria-hidden": "true" },
+                h("span", { class: amount > 0 ? "bar bar-win" : "bar bar-loss", style: `width: ${((Math.abs(amount) / largest) * 50).toFixed(2)}%` }),
+              ),
+              h("span", { class: "amount", text: signedMoney(amount) }),
+            ),
+          ),
+        ),
+        missingNote(missing),
+      );
+    }),
+  );
 }
 
 function settlementText(transfers) {

@@ -9,6 +9,11 @@
   --win: #1b6e3c;
   --loss: #b3261e;
   --warning: #8a5300;
+  /* Chart win and loss: blue and red, which colour-blind readers can tell
+     apart (green and red failed the check), with a gray centre line. */
+  --chart-win: #2a78d6;
+  --chart-loss: #e34948;
+  --chart-baseline: #c9c7c1;
   --radius: 12px;
   color-scheme: light dark;
 }
@@ -25,6 +30,9 @@
     --win: #6fd69a;
     --loss: #ff8a80;
     --warning: #ffbf5c;
+    --chart-win: #3987e5;
+    --chart-loss: #e66767;
+    --chart-baseline: #55554f;
   }
 }
 
@@ -633,4 +641,99 @@ dialog::backdrop {
 
 .person-what {
   overflow-wrap: break-word;
+}
+
+/* Monthly wins and losses: name, a bar from the centre line (right = won,
+   left = lost), and the amount. All months share one scale. */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.chart-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  background: var(--chart-win);
+}
+
+.chart-legend .legend-loss::before {
+  background: var(--chart-loss);
+}
+
+.month-block h3 {
+  margin: 14px 0 6px;
+}
+
+.month-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+/* Name and amount on one line, the bar full width under them, so the bars
+   are long enough to compare even on a 320px phone. */
+.month-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.month-bars .name {
+  overflow-wrap: break-word;
+}
+
+.month-bars .bar-track {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.bar-track {
+  position: relative;
+  height: 12px;
+}
+
+/* The centre line: zero. */
+.bar-track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--chart-baseline);
+}
+
+.bar {
+  position: absolute;
+  top: 0;
+  height: 12px;
+}
+
+/* Rounded at the data end, square at the centre line. */
+.bar-win {
+  left: 50%;
+  background: var(--chart-win);
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-loss {
+  right: 50%;
+  background: var(--chart-loss);
+  border-radius: 4px 0 0 4px;
+}
+
+.month-bars .amount {
+  text-align: right;
 }
