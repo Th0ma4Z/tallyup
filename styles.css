@@ -609,3 +609,28 @@ dialog::backdrop {
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
+
+/* A member's history. */
+.back-button {
+  margin-bottom: 12px;
+}
+
+/* The date on its own line, then what it was and the amount. */
+.person-records button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 12px;
+}
+
+.person-date {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.person-what {
+  overflow-wrap: break-word;
+}

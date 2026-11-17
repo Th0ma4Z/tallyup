@@ -9,6 +9,7 @@ import {
   memberIsUsed,
   parseAmount,
   parseBackup,
+  recordBalances,
   recordProblem,
   recordWinnings,
   roundMoney,
@@ -48,6 +49,8 @@ let stale = false;
 let rates = null;
 let tab = "records";
 let selectedDate = localDateKey(new Date());
+// The member whose history is open on the People tab, or null for the list.
+let viewingMemberId = null;
 // The state before the last delete, settle or restore, for Undo.
 let undo = null;
 let editingRecord = null;
@@ -339,7 +342,7 @@ function render() {
   staleNotice.hidden = !stale;
   document.getElementById("stale-text").textContent = t("staleNotice");
   document.getElementById("stale-reload").textContent = t("reload");
-  const content = { records: renderRecords, settle: renderSettle, people: renderPeople, more: renderMore }[tab]();
+  const content = { records: renderRecords, settle: renderSettle, people: renderPeopleTab, more: renderMore }[tab]();
   view.replaceChildren(...[renderUndo(), ...content].filter(Boolean));
 }
 
@@ -1136,6 +1139,11 @@ function markAllSettled(missing) {
 
 // ----- People tab -----
 
+function renderPeopleTab() {
+  const member = book.members.find((other) => other.id === viewingMemberId);
+  return member ? renderPerson(member) : renderPeople();
+}
+
 function renderPeople() {
   const error = h("p", { class: "form-error", id: "member-error", role: "alert", hidden: true });
   const input = h("input", {
@@ -1172,6 +1180,7 @@ function renderPeople() {
             h(
               "div",
               { class: "button-row" },
+              h("button", { type: "button", class: "button-secondary", text: t("personHistory"), "aria-label": `${t("personHistory")} ${member.name}`, onclick: () => openPerson(member) }),
               h("button", { type: "button", class: "button-secondary", text: t("rename"), "aria-label": `${t("rename")} ${member.name}`, onclick: () => openRename(member) }),
               h("button", { type: "button", class: "button-secondary button-danger", text: t("delete"), "aria-label": `${t("delete")} ${member.name}`, onclick: () => deleteMember(member) }),
             ),
@@ -1180,6 +1189,117 @@ function renderPeople() {
       )
     : h("p", { class: "muted", text: t("noMembers") });
   return [h("section", { class: "card", "aria-labelledby": "people-heading" }, h("h2", { id: "people-heading", text: t("peopleTitle") }), form), list];
+}
+
+function openPerson(member) {
+  viewingMemberId = member.id;
+  render();
+  view.focus();
+  window.scrollTo(0, 0);
+}
+
+function closePerson() {
+  const id = viewingMemberId;
+  viewingMemberId = null;
+  render();
+  document.querySelector(`[data-member-id="${CSS.escape(id)}"] button`)?.focus();
+}
+
+// One member's history: their totals now, then every record they're in,
+// newest first, each with what it meant for them.
+function renderPerson(member) {
+  const currency = book.settings.currency;
+  const records = book.records
+    .filter((record) => memberIsUsed(member.id, [record]))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const { totals, missing } = sumByMember(book.records, recordWinnings, currency, rates);
+  const { balances } = settlementPlan(book.records, currency, rates);
+  const total = totals[member.id] ?? 0;
+  const balance = balances[member.id] ?? 0;
+  const summary = h(
+    "section",
+    { class: "card", "aria-labelledby": "person-heading" },
+    h("h2", { id: "person-heading", text: member.name }),
+    h(
+      "ul",
+      { class: "amount-list", id: "person-summary" },
+      h("li", {}, h("span", { class: "name", text: t("recordsOf", { n: records.length }) })),
+      h("li", {}, h("span", { class: "name", text: t("totalLabel") }), h("span", { class: amountClass(total), text: signedMoney(total) })),
+      h("li", {}, h("span", { class: "name", text: t("personNow") }), h("span", { class: amountClass(balance), text: balanceText(balance) })),
+    ),
+    missingNote(missing),
+  );
+  const list = records.length
+    ? h(
+        "ul",
+        { class: "day-list person-records", id: "person-records" },
+        records.map((record) => {
+          const line = personLine(record, member.id);
+          return h(
+            "li",
+            {},
+            h(
+              "button",
+              { type: "button", onclick: () => goToRecord(record) },
+              h("span", { class: "person-date", text: longDate(record.date) }),
+              h("span", { class: "person-what", text: line.text }),
+              line.amount === null ? null : h("span", { class: line.isResult ? amountClass(line.amount) : "amount muted", text: signedMoney(line.amount, record.currency) }),
+            ),
+          );
+        }),
+      )
+    : h("p", { class: "muted", text: t("personNone", { name: member.name }) });
+  return [
+    h("button", { type: "button", class: "button-secondary back-button", id: "back-to-people", text: t("backToPeople"), onclick: closePerson }),
+    summary,
+    h(
+      "section",
+      { class: "card", "aria-labelledby": "person-records-heading" },
+      h("h2", { id: "person-records-heading", text: t("personRecordsTitle") }),
+      records.length ? h("p", { class: "hint", text: t("personTapHint") }) : null,
+      list,
+    ),
+  ];
+}
+
+// What one record meant for one member: a description, and an amount in the
+// record's currency. isResult is true for a win or loss (cards, their own
+// bets); AA shares, an account they hold and payments are money moving, not
+// winning, so they're shown in grey, as in the totals.
+function personLine(record, id) {
+  if (record.type === "card") {
+    return { text: t("typeCard"), amount: record.amounts[id], isResult: true };
+  }
+  if (record.type === "bet") {
+    if (record.bettorId === id) {
+      const text = record.holderId === id ? t("personBetOwn") : t("personBet", { holder: nameOf(record.holderId) });
+      return { text, amount: betResult(record), isResult: true };
+    }
+    return { text: t("personHolder", { bettor: nameOf(record.bettorId) }), amount: roundMoney(-betResult(record)), isResult: false };
+  }
+  if (record.type === "payment") {
+    return record.fromId === id
+      ? { text: t("personPaid", { to: nameOf(record.toId), amount: money(record.amount, record.currency) }), amount: null }
+      : { text: t("personReceived", { from: nameOf(record.fromId), amount: money(record.amount, record.currency) }), amount: null };
+  }
+  const paid = record.payerId === id ? record.amount : 0;
+  const share = roundMoney(paid - (recordBalances(record)[id] ?? 0));
+  const amount = money(record.amount, record.currency);
+  if (!record.participantIds.includes(id)) {
+    return { text: t("personSplitPaid", { amount }), amount: null };
+  }
+  return paid
+    ? { text: t("personSplitPaidShare", { amount, share: money(share, record.currency) }), amount: null }
+    : { text: t("personSplitShare", { share: money(share, record.currency), payer: nameOf(record.payerId) }), amount: null };
+}
+
+// From someone's history to the day of one of their records.
+function goToRecord(record) {
+  tab = "records";
+  setDay(record.date);
+  const item = document.querySelector(`[data-record-id="${CSS.escape(record.id)}"]`);
+  item?.scrollIntoView({ block: "center" });
+  item?.querySelector("button")?.focus();
 }
 
 function nameProblem(name, exceptId = null) {
