@@ -767,3 +767,16 @@ dialog::backdrop {
   width: 100%;
   margin-top: 10px;
 }
+
+/* When a backup download was last started, on the More tab. */
+.backup-status {
+  margin: 4px 0 10px;
+  font-weight: 600;
+}
+
+/* Shown when a backup download started but its time couldn't be stored. */
+.backup-warning {
+  margin: 0 0 10px;
+  font-weight: 600;
+  color: var(--warning);
+}

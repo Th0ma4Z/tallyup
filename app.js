@@ -24,6 +24,9 @@ import {
 import { decimalMark, getLang, LANGS, locale, setLang, t } from "./i18n.js";
 
 const RATES_KEY = "tallyup.rates";
+// When this browser last started a backup download (an ISO time). Kept apart
+// from the book, so restoring or undoing never changes it.
+const BACKUP_TIME_KEY = "tallyup.lastBackupStarted";
 const RATES_URL = "https://api.frankfurter.dev/v1/latest?from=EUR";
 // The currencies the exchange-rate service covers.
 export const CURRENCIES = [
@@ -1657,6 +1660,8 @@ function renderMore() {
       { class: "card", "aria-labelledby": "backup-heading" },
       h("h2", { id: "backup-heading", text: t("backupTitle") }),
       h("p", { class: "hint", text: t("backupHelp") }),
+      h("p", { class: "backup-status", id: "backup-status", "aria-live": "polite", text: backupStatusText() }),
+      h("p", { class: "backup-warning", id: "backup-warning", role: "alert", hidden: true, text: t("backupTimeNotSaved") }),
       h("button", { type: "button", class: "button-secondary", id: "download-button", text: t("download"), onclick: downloadBackup }),
       h("h3", { text: t("restoreTitle"), style: "margin-top:16px" }),
       h("label", { for: "restore-input", text: t("restoreChoose") }),
@@ -1672,16 +1677,58 @@ function changeSetting(changes, focusId) {
   }
 }
 
+// The time is recorded only once the file was made and its download started.
+// Browsers don't tell a page whether the file was then saved, so the status
+// says "download started", never "saved".
 function downloadBackup() {
   const file = `tallyup-backup-${localDateKey(new Date())}.json`;
-  const blob = new Blob([JSON.stringify(buildBackup(book), null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = h("a", { href: url, download: file });
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  try {
+    const blob = new Blob([JSON.stringify(buildBackup(book), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = h("a", { href: url, download: file });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    showToast(t("backupFailed"));
+    return;
+  }
+  let timeKept = true;
+  try {
+    window.localStorage.setItem(BACKUP_TIME_KEY, new Date().toISOString());
+  } catch {
+    // The download still started; only the time couldn't be kept.
+    timeKept = false;
+  }
+  const status = document.getElementById("backup-status");
+  if (status) {
+    status.textContent = backupStatusText();
+  }
+  // Without this, the older time above would look like this download's.
+  const warning = document.getElementById("backup-warning");
+  if (warning) {
+    warning.hidden = timeKept;
+  }
   showToast(t("downloaded", { file }));
+}
+
+// "Last backup download started: <time> (<how long ago>)", or unknown.
+function backupStatusText() {
+  let started = null;
+  try {
+    started = new Date(window.localStorage.getItem(BACKUP_TIME_KEY) ?? "");
+  } catch {
+    // Storage can't be read: the time is unknown.
+  }
+  if (!started || Number.isNaN(started.getTime())) {
+    return t("backupStatusUnknown");
+  }
+  const time = started.toLocaleString(locale(), { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const midnight = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((midnight(started) - midnight(new Date())) / 86_400_000);
+  const ago = new Intl.RelativeTimeFormat(locale(), { numeric: "auto" }).format(days, "day");
+  return t("backupStatusStarted", { time, ago });
 }
 
 async function previewRestore(event) {
