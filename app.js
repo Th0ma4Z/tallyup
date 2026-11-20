@@ -27,6 +27,10 @@ const RATES_KEY = "tallyup.rates";
 // When this browser last started a backup download (an ISO time). Kept apart
 // from the book, so restoring or undoing never changes it.
 const BACKUP_TIME_KEY = "tallyup.lastBackupStarted";
+// A short fingerprint of the records at the last backup, to tell whether
+// anything was recorded since.
+const BACKUP_RECORDS_KEY = "tallyup.lastBackupRecords";
+const BACKUP_REMINDER_MS = 7 * 86_400_000;
 const RATES_URL = "https://api.frankfurter.dev/v1/latest?from=EUR";
 // The currencies the exchange-rate service covers.
 export const CURRENCIES = [
@@ -394,6 +398,7 @@ function renderRecords() {
     },
   });
   parts.push(
+    backupReminder(),
     h("button", { type: "button", class: "button-secondary search-open", id: "search-open", text: t("searchOpen"), onclick: openSearch }),
     h(
       "section",
@@ -509,6 +514,37 @@ function goToTab(name) {
   tab = name;
   render();
   view.focus();
+}
+
+// Records page: when the last backup is over a week old (or there's none) and
+// records have changed since, say so and offer a way there.
+function backupReminder() {
+  if (!book.records.length) {
+    return null;
+  }
+  const started = lastBackupTime();
+  let backedUpRecords = null;
+  try {
+    backedUpRecords = window.localStorage.getItem(BACKUP_RECORDS_KEY);
+  } catch {
+    // Can't read it: treat the records as not backed up.
+  }
+  if (started && (Date.now() - started.getTime() <= BACKUP_REMINDER_MS || backedUpRecords === recordsFingerprint(book.records))) {
+    return null;
+  }
+  return h(
+    "section",
+    { class: "card backup-reminder", id: "backup-reminder" },
+    h("p", { text: started ? t("backupRemindOld", { ago: daysAgoText(started) }) : t("backupRemindNever") }),
+    h("button", { type: "button", class: "button-secondary", id: "backup-reminder-go", text: t("goBackup"), onclick: goToBackup }),
+  );
+}
+
+function goToBackup() {
+  goToTab("more");
+  const button = document.getElementById("download-button");
+  button.scrollIntoView({ block: "center" });
+  button.focus();
 }
 
 function goToRestore() {
@@ -1737,6 +1773,7 @@ function downloadBackup() {
   }
   let timeKept = true;
   try {
+    window.localStorage.setItem(BACKUP_RECORDS_KEY, recordsFingerprint(book.records));
     window.localStorage.setItem(BACKUP_TIME_KEY, new Date().toISOString());
   } catch {
     // The download still started; only the time couldn't be kept.
@@ -1756,20 +1793,40 @@ function downloadBackup() {
 
 // "Last backup download started: <time> (<how long ago>)", or unknown.
 function backupStatusText() {
-  let started = null;
-  try {
-    started = new Date(window.localStorage.getItem(BACKUP_TIME_KEY) ?? "");
-  } catch {
-    // Storage can't be read: the time is unknown.
-  }
-  if (!started || Number.isNaN(started.getTime())) {
+  const started = lastBackupTime();
+  if (!started) {
     return t("backupStatusUnknown");
   }
   const time = started.toLocaleString(locale(), { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  const midnight = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const days = Math.round((midnight(started) - midnight(new Date())) / 86_400_000);
-  const ago = new Intl.RelativeTimeFormat(locale(), { numeric: "auto" }).format(days, "day");
-  return t("backupStatusStarted", { time, ago });
+  return t("backupStatusStarted", { time, ago: daysAgoText(started) });
+}
+
+// When a backup download last started in this browser, or null if unknown.
+function lastBackupTime() {
+  try {
+    const started = new Date(window.localStorage.getItem(BACKUP_TIME_KEY) ?? "");
+    return Number.isNaN(started.getTime()) ? null : started;
+  } catch {
+    // Storage can't be read: the time is unknown.
+    return null;
+  }
+}
+
+// "today", "yesterday", "3 days ago", counted by calendar day.
+function daysAgoText(date) {
+  const midnight = (day) => new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+  const days = Math.round((midnight(date) - midnight(new Date())) / 86_400_000);
+  return new Intl.RelativeTimeFormat(locale(), { numeric: "auto" }).format(days, "day");
+}
+
+// FNV-1a over the records' JSON: equal records give the same short text.
+function recordsFingerprint(records) {
+  const text = JSON.stringify(records);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+  }
+  return `${records.length}-${(hash >>> 0).toString(16)}`;
 }
 
 async function previewRestore(event) {

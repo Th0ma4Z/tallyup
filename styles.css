@@ -793,3 +793,13 @@ dialog::backdrop {
   background: var(--bg);
   font-weight: 600;
 }
+
+/* Records page: the last backup is over a week old and records changed since. */
+.backup-reminder {
+  border-left: 4px solid var(--warning);
+}
+
+.backup-reminder p {
+  margin-top: 0;
+  font-weight: 600;
+}
