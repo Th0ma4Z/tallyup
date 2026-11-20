@@ -783,3 +783,13 @@ dialog::backdrop {
   font-weight: 600;
   color: var(--warning);
 }
+
+/* "Saved. N card games on this day" at the top of the next game's form. */
+.saved-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-weight: 600;
+}

@@ -7,7 +7,7 @@
     <title>TallyUp 记账本</title>
     <meta name="apple-mobile-web-app-title" content="TallyUp" />
     <!-- deploy.sh replaces "local" with the commit it publishes. -->
-    <meta name="tallyup-version" content="4e4328a" />
+    <meta name="tallyup-version" content="d2ba925" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -47,6 +47,8 @@
         <p id="record-error" class="form-error" role="alert" hidden></p>
         <div class="form-actions">
           <button type="submit" class="button-primary" id="record-save"></button>
+          <!-- Only for a new card game: saves, then opens the next game with the same people. -->
+          <button type="submit" class="button-secondary" id="record-save-next" hidden></button>
           <button type="button" class="button-secondary" id="record-cancel"></button>
         </div>
       </form>

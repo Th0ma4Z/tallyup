@@ -119,6 +119,8 @@ export const STRINGS = {
     participants: "谁一起平摊",
     preview: "结果：",
     save: "保存",
+    saveAndNext: "保存，再记一局",
+    savedGameCount: "已保存。这一天已记 {n} 局牌，接着填下一局。",
     cancel: "取消",
     choose: "请选择",
 
@@ -353,6 +355,8 @@ export const STRINGS = {
     participants: "誰一起均分",
     preview: "結果：",
     save: "儲存",
+    saveAndNext: "儲存，再記一局",
+    savedGameCount: "已儲存。這一天已記 {n} 局牌，接著填下一局。",
     cancel: "取消",
     choose: "請選擇",
 
@@ -587,6 +591,8 @@ export const STRINGS = {
     participants: "Split between",
     preview: "Result: ",
     save: "Save",
+    saveAndNext: "Save, add another game",
+    savedGameCount: "Saved. {n} card games on this day so far; fill in the next one.",
     cancel: "Cancel",
     choose: "Choose",
 
@@ -821,6 +827,8 @@ export const STRINGS = {
     participants: "Dividir entre",
     preview: "Resultado: ",
     save: "Guardar",
+    saveAndNext: "Guardar y anotar otra",
+    savedGameCount: "Guardado. Ya van {n} partidas de cartas este día; rellena la siguiente.",
     cancel: "Cancelar",
     choose: "Elige",
 
@@ -1055,6 +1063,8 @@ export const STRINGS = {
     participants: "割り勘する人",
     preview: "結果：",
     save: "保存",
+    saveAndNext: "保存して次のゲームへ",
+    savedGameCount: "保存しました。この日のカードゲームは {n} 件です。続けて次を入力してください。",
     cancel: "キャンセル",
     choose: "選んでください",
 
@@ -1289,6 +1299,8 @@ export const STRINGS = {
     participants: "같이 나눌 사람",
     preview: "결과: ",
     save: "저장",
+    saveAndNext: "저장하고 한 판 더",
+    savedGameCount: "저장했어요. 이날 카드 게임은 {n}판이에요. 이어서 다음 판을 입력하세요.",
     cancel: "취소",
     choose: "선택하세요",
 
@@ -1523,6 +1535,8 @@ export const STRINGS = {
     participants: "Partagé entre",
     preview: "Résultat : ",
     save: "Enregistrer",
+    saveAndNext: "Enregistrer et noter la suivante",
+    savedGameCount: "Enregistré. {n} parties de cartes ce jour-là pour l'instant ; remplis la suivante.",
     cancel: "Annuler",
     choose: "Choisir",
 
@@ -1757,6 +1771,8 @@ export const STRINGS = {
     participants: "Geteilt zwischen",
     preview: "Ergebnis: ",
     save: "Speichern",
+    saveAndNext: "Speichern, nächstes Spiel",
+    savedGameCount: "Gespeichert. Bisher {n} Kartenspiele an diesem Tag; trag das nächste ein.",
     cancel: "Abbrechen",
     choose: "Auswählen",
 

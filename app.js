@@ -814,20 +814,30 @@ function transferText(transfer) {
 
 // ----- Record form -----
 
-function openRecordDialog(type, existing = null) {
+// `next` is the card game just saved with "save, add another": the new form
+// keeps its currency and says how many games that day has.
+function openRecordDialog(type, existing = null, next = null) {
   recordType = type;
   editingRecord = existing;
   const titleKey = existing ? "editRecord" : { card: "newCard", bet: "newBet", split: "newSplit" }[type];
   document.getElementById("record-dialog-title").textContent = t(titleKey);
   document.getElementById("record-save").textContent = t("save");
+  const saveNext = document.getElementById("record-save-next");
+  saveNext.textContent = t("saveAndNext");
+  saveNext.hidden = type !== "card" || Boolean(existing);
   document.getElementById("record-cancel").textContent = t("cancel");
   recordError.hidden = true;
   const date = existing?.date ?? selectedDate;
-  const currency = existing?.currency ?? book.settings.currency;
-  const fields = [
+  const currency = existing?.currency ?? next?.currency ?? book.settings.currency;
+  const fields = [];
+  if (next) {
+    const games = book.records.filter((record) => record.type === "card" && record.date === next.date).length;
+    fields.push(h("p", { class: "saved-note", id: "saved-note", role: "status", text: t("savedGameCount", { n: games }) }));
+  }
+  fields.push(
     field("date", t("date"), h("input", { type: "date", id: "f-date", name: "date", value: date, required: true })),
     field("currency", t("currency"), currencySelect("f-currency", "currency", currency)),
-  ];
+  );
   if (type === "card") {
     // Start with the people in this game (when editing) or in the last card
     // game; everyone else is one tap away.
@@ -950,6 +960,11 @@ function openRecordDialog(type, existing = null) {
   recordFields.replaceChildren(...fields);
   updateLivePreview();
   recordDialog.showModal();
+  if (next) {
+    // Straight to the first amount, with the "saved" line in view above it.
+    recordDialog.scrollTop = 0;
+    recordFields.querySelector(".player-row:not([hidden]) input[name^='amount-']")?.focus({ preventScroll: true });
+  }
 }
 
 function field(name, label, control) {
@@ -1110,15 +1125,19 @@ function saveRecordFromForm(event) {
   if (editingRecord && showPaymentImpact(editingRecord, record, records, () => finishSave(record, records))) {
     return;
   }
-  finishSave(record, records);
+  finishSave(record, records, event.submitter?.id === "record-save-next");
 }
 
-function finishSave(record, records) {
+function finishSave(record, records, addAnother = false) {
   if (commit(withRecords(records), { message: t("saved") })) {
     selectedDate = record.date;
     recordDialog.close();
     tab = "records";
     render();
+    if (addAnother) {
+      openRecordDialog("card", null, record);
+      return;
+    }
     document.querySelector(`[data-record-id="${CSS.escape(record.id)}"] button`)?.focus();
   } else {
     // Keep the form open so nothing typed is lost, and say why.
