@@ -406,9 +406,11 @@ dialog::backdrop {
   background: rgb(0 0 0 / 45%);
 }
 
+/* The name keeps room for a few letters; when long Won/Lost words don't fit
+   beside it (German), they move to their own line instead of squeezing it. */
 .player-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px 10px;
   align-items: center;
   padding: 8px 0;
@@ -416,12 +418,13 @@ dialog::backdrop {
 }
 
 .player-row .player-name {
+  flex: 1 1 6em;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .player-row input {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
 }
 
 .choice-group {
