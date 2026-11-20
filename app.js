@@ -1617,6 +1617,20 @@ function deleteMember(member) {
 
 // ----- More tab -----
 
+// A short form a friend fills in and sends back, naming the language and the
+// published version (deploy.sh writes the commit into index.html).
+function translationFeedbackText() {
+  const version = document.querySelector('meta[name="tallyup-version"]')?.content || "?";
+  return [
+    t("feedbackHeading"),
+    t("feedbackLanguage", { name: LANGS[getLang()], code: getLang() }),
+    t("feedbackVersion", { version }),
+    t("feedbackPage"),
+    t("feedbackNow"),
+    t("feedbackBetter"),
+  ].join("\n");
+}
+
 function renderMore() {
   const langSelect = h(
     "select",
@@ -1639,6 +1653,14 @@ function renderMore() {
       langSelect,
       h("label", { for: "currency-select", text: t("mainCurrency") }),
       currencyInput,
+    ),
+    h(
+      "section",
+      { class: "card", "aria-labelledby": "feedback-heading" },
+      h("h2", { id: "feedback-heading", text: t("feedbackTitle") }),
+      h("p", { class: "hint", text: t("feedbackHint") }),
+      h("button", { type: "button", class: "button-secondary", id: "feedback-button", text: t("feedbackButton"), onclick: () => shareText(translationFeedbackText(), "feedback-fallback") }),
+      h("div", { id: "feedback-fallback" }),
     ),
     h(
       "section",
