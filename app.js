@@ -18,6 +18,7 @@ import {
   settlementPlan,
   splitSharesLeft,
   STORAGE_KEY,
+  recordsBetween,
   sumByMember,
   betResult,
 } from "./ledger.js";
@@ -67,6 +68,8 @@ let tab = "records";
 let selectedDate = localDateKey(new Date());
 // The search on the Records tab ({ text, type, memberId }), or null for the day view.
 let search = null;
+// The settle page's date range for wins and losses; not saved.
+let resultsRange = { from: "", to: "" };
 // The member whose history is open on the People tab, or null for the list.
 let viewingMemberId = null;
 // The state before the last delete, settle or restore, for Undo.
@@ -1310,6 +1313,55 @@ function finishSave(record, records, addAnother = false) {
 
 // ----- Settle tab -----
 
+// Wins and losses from cards and bets, over all dates or a chosen range.
+function renderTotals() {
+  const { from, to } = resultsRange;
+  const ranged = Boolean(from || to);
+  const backwards = Boolean(from && to && from > to);
+  const { totals, missing } = sumByMember(recordsBetween(book.records, from, to), recordWinnings, book.settings.currency, rates);
+  const dateInput = (id, key) =>
+    h("input", {
+      type: "date",
+      id,
+      value: resultsRange[key],
+      onchange: (event) => {
+        const value = event.target.value;
+        if (value === "" || isRealDate(value)) {
+          resultsRange = { ...resultsRange, [key]: value };
+          render();
+          document.getElementById(id)?.focus();
+        }
+      },
+    });
+  return h(
+    "section",
+    { class: "card", "aria-labelledby": "totals-heading" },
+    h("h2", { id: "totals-heading", text: t(ranged ? "rangeTitle" : "totalResults") }),
+    h("p", { class: "hint", text: t("rangeHint") }),
+    h(
+      "div",
+      { class: "range-row" },
+      h("label", {}, h("span", { text: t("rangeFrom") }), dateInput("range-from", "from")),
+      h("label", {}, h("span", { text: t("rangeTo") }), dateInput("range-to", "to")),
+    ),
+    ranged
+      ? h("button", {
+          type: "button",
+          class: "button-secondary",
+          id: "range-all",
+          text: t("rangeAll"),
+          onclick: () => {
+            resultsRange = { from: "", to: "" };
+            render();
+            document.getElementById("range-from")?.focus();
+          },
+        })
+      : null,
+    backwards ? h("p", { class: "form-error", role: "alert", text: t("rangeBackwards") }) : amountList(totals, t(ranged ? "rangeEmpty" : "dayResultsEmpty")),
+    backwards ? null : missingNote(missing),
+  );
+}
+
 function renderSettle() {
   const currency = book.settings.currency;
   const unsettled = book.records.filter((record) => !record.settled);
@@ -1371,17 +1423,7 @@ function renderSettle() {
         ),
       ),
     );
-    const { totals, missing: missingTotal } = sumByMember(book.records, recordWinnings, currency, rates);
-    parts.push(
-      h(
-        "section",
-        { class: "card", "aria-labelledby": "totals-heading" },
-        h("h2", { id: "totals-heading", text: t("totalResults") }),
-        amountList(totals, t("dayResultsEmpty")),
-        missingNote(missingTotal),
-      ),
-      renderMonthlyChart(),
-    );
+    parts.push(renderTotals(), renderMonthlyChart());
   }
   return parts.filter(Boolean);
 }

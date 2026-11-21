@@ -404,6 +404,12 @@ export function memberIsUsed(memberId, records) {
   return records.some((record) => peopleIn(record).includes(memberId));
 }
 
+// The records dated from..to, both days included. An empty end is open.
+// Dates are "YYYY-MM-DD", so comparing the text compares the days.
+export function recordsBetween(records, from = "", to = "") {
+  return records.filter((record) => (!from || record.date >= from) && (!to || record.date <= to));
+}
+
 // The records matching a search, newest first. text matches the note or the
 // name of anyone in the record, ignoring case; type and memberId narrow it
 // down. Empty fields don't filter.

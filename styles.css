@@ -871,3 +871,22 @@ dialog::backdrop {
 .price-note.is-off {
   color: var(--warning);
 }
+
+/* Settle page: from and to dates for wins and losses, side by side when they fit. */
+.range-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.range-row label {
+  display: flex;
+  flex: 1 1 9em;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#range-all {
+  margin-bottom: 12px;
+}
