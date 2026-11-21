@@ -18,8 +18,10 @@
   color-scheme: light dark;
 }
 
+/* Dark colours: from the system setting unless More → Appearance says light,
+   or always when it says dark. The two lists must stay the same. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #111714;
     --surface: #1a221e;
     --text: #e6eee9;
@@ -34,6 +36,27 @@
     --chart-loss: #e66767;
     --chart-baseline: #55554f;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #111714;
+  --surface: #1a221e;
+  --text: #e6eee9;
+  --muted: #a2b0a8;
+  --border: #2f3b35;
+  --primary: #5cc79c;
+  --primary-text: #0b1a13;
+  --win: #6fd69a;
+  --loss: #ff8a80;
+  --warning: #ffbf5c;
+  --chart-win: #3987e5;
+  --chart-loss: #e66767;
+  --chart-baseline: #55554f;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {

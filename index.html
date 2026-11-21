@@ -7,11 +7,23 @@
     <title>TallyUp 记账本</title>
     <meta name="apple-mobile-web-app-title" content="TallyUp" />
     <!-- deploy.sh replaces "local" with the commit it publishes. -->
-    <meta name="tallyup-version" content="19cf88a" />
+    <meta name="tallyup-version" content="8c4fd10" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="stylesheet" href="styles.css" />
+    <script>
+      // Set light or dark from More → Appearance before the first paint, so a
+      // dark choice doesn't flash white on every launch. app.js does the rest.
+      try {
+        const theme = window.localStorage.getItem("tallyup.theme");
+        if (theme === "light" || theme === "dark") {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch {
+        // Storage blocked: follow the system.
+      }
+    </script>
     <script type="module" src="app.js"></script>
   </head>
   <body>

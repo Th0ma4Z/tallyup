@@ -31,6 +31,9 @@ const BACKUP_TIME_KEY = "tallyup.lastBackupStarted";
 // anything was recorded since.
 const BACKUP_RECORDS_KEY = "tallyup.lastBackupRecords";
 const BACKUP_REMINDER_MS = 7 * 86_400_000;
+// Light, dark or follow the system, per device (index.html applies it early).
+const THEME_KEY = "tallyup.theme";
+const THEME_LABELS = { system: "themeSystem", light: "themeLight", dark: "themeDark" };
 const RATES_URL = "https://api.frankfurter.dev/v1/latest?from=EUR";
 // The currencies the exchange-rate service covers.
 export const CURRENCIES = [
@@ -1706,6 +1709,12 @@ function renderMore() {
       { class: "card" },
       h("label", { for: "lang-select", text: t("language") }),
       langSelect,
+      h("label", { for: "theme-select", text: t("appearance") }),
+      h(
+        "select",
+        { id: "theme-select", onchange: (event) => changeTheme(event.target.value) },
+        Object.entries(THEME_LABELS).map(([theme, label]) => h("option", { value: theme, text: t(label), selected: theme === currentTheme() })),
+      ),
       h("label", { for: "currency-select", text: t("mainCurrency") }),
       currencyInput,
     ),
@@ -1746,6 +1755,28 @@ function renderMore() {
       h("div", { id: "restore-area" }),
     ),
   ];
+}
+
+function currentTheme() {
+  return document.documentElement.dataset.theme ?? "system";
+}
+
+// Takes effect at once; it's kept for next time if storage allows.
+function changeTheme(theme) {
+  if (theme === "light" || theme === "dark") {
+    document.documentElement.dataset.theme = theme;
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+  try {
+    if (theme === "light" || theme === "dark") {
+      window.localStorage.setItem(THEME_KEY, theme);
+    } else {
+      window.localStorage.removeItem(THEME_KEY);
+    }
+  } catch {
+    showToast(t("themeNotKept"));
+  }
 }
 
 function changeSetting(changes, focusId) {
