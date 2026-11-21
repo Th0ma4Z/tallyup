@@ -118,6 +118,17 @@ function start() {
     }
   });
   recordForm.addEventListener("submit", saveRecordFromForm);
+  // Price or odds fill in the max payout; typing in the payout itself is left alone.
+  recordForm.addEventListener("input", (event) => {
+    if (["price", "price-kind", "stake"].includes(event.target.name)) {
+      applyBetPrice();
+    }
+  });
+  recordForm.addEventListener("change", (event) => {
+    if (event.target.name === "price-kind") {
+      applyBetPrice();
+    }
+  });
   recordForm.addEventListener("input", updateLivePreview);
   recordForm.addEventListener("change", updateLivePreview);
   // An error message goes away as soon as someone starts fixing it.
@@ -952,6 +963,15 @@ function openRecordDialog(type, existing = null, next = null) {
       field("bettor", t("bettor"), memberSelect("f-bettor", "bettor", existing?.bettorId ?? "")),
       field("holder", t("holder"), memberSelect("f-holder", "holder", existing?.holderId ?? lastBet?.holderId ?? "")),
       field("stake", t("stake"), h("input", { id: "f-stake", name: "stake", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.stake) })),
+      h(
+        "fieldset",
+        { class: "choice-group price-helper" },
+        h("legend", { text: t("priceHelper") }),
+        chip("radio", "price-kind", "cents", t("priceCents"), true),
+        chip("radio", "price-kind", "odds", t("priceOdds"), false),
+        h("input", { id: "f-price", name: "price", inputmode: "decimal", autocomplete: "off", "aria-label": t("priceValue"), "aria-describedby": "price-note" }),
+        h("p", { class: "hint price-note", id: "price-note", "aria-live": "polite" }),
+      ),
       field("payout", t("payout"), h("input", { id: "f-payout", name: "payout", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.payout) })),
       h(
         "fieldset",
@@ -1105,6 +1125,44 @@ function recordFromForm() {
 }
 
 // The line under the form that says what the record means before saving.
+// Bet form: a Kalshi price in cents (stake ÷ price) or decimal odds
+// (stake × odds) fills in the max payout, with a line saying how.
+function applyBetPrice() {
+  const note = document.getElementById("price-note");
+  const priceText = recordForm.elements.price?.value.trim();
+  if (!note) {
+    return;
+  }
+  note.classList.remove("is-off");
+  if (!priceText) {
+    note.textContent = "";
+    return;
+  }
+  const kind = recordForm.querySelector('input[name="price-kind"]:checked')?.value ?? "cents";
+  const price = readAmount(priceText);
+  const stake = readAmount(recordForm.elements.stake.value.trim());
+  const valid = kind === "cents" ? price >= 1 && price <= 99 : price > 1;
+  if (!valid) {
+    note.classList.add("is-off");
+    note.textContent = t(kind === "cents" ? "priceBadCents" : "priceBadOdds");
+    return;
+  }
+  if (!(stake > 0)) {
+    note.classList.add("is-off");
+    note.textContent = t("priceNeedStake");
+    return;
+  }
+  const payout = Math.round((kind === "cents" ? stake / (price / 100) : stake * price) * 100) / 100;
+  recordForm.elements.payout.value = amountForInput(payout);
+  const currency = recordForm.elements.currency.value;
+  note.textContent = t(kind === "cents" ? "priceNoteCents" : "priceNoteOdds", {
+    price: amountForInput(price),
+    stake: money(stake, currency),
+    payout: money(payout, currency),
+  });
+  updateLivePreview();
+}
+
 // The one shown player still without an amount, and what makes the game add
 // up to 0, or null when that isn't clear (none or several empty, or a typo).
 function lastPlayerFill() {

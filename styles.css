@@ -857,3 +857,17 @@ dialog::backdrop {
   font-weight: 700;
   line-height: 1;
 }
+
+/* Bet form: price or odds, filling in the max payout. */
+.price-helper input[name="price"],
+.price-helper .price-note {
+  flex-basis: 100%;
+}
+
+.price-helper .price-note {
+  margin: 0;
+}
+
+.price-note.is-off {
+  color: var(--warning);
+}
