@@ -826,3 +826,8 @@ dialog::backdrop {
   margin-top: 0;
   font-weight: 600;
 }
+
+/* Card form: fills the one player left so the game adds up to 0. */
+.fill-last {
+  margin-top: 8px;
+}

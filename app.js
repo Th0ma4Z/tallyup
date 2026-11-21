@@ -992,8 +992,11 @@ function openRecordDialog(type, existing = null, next = null) {
       ),
     );
   }
+  fields.push(h("p", { id: "live-note", class: "live-note", "aria-live": "polite" }));
+  if (type === "card") {
+    fields.push(h("button", { type: "button", class: "button-secondary fill-last", id: "fill-last", hidden: true, onclick: fillLastPlayer }));
+  }
   fields.push(
-    h("p", { id: "live-note", class: "live-note", "aria-live": "polite" }),
     field("note", t("noteOptional"), h("input", { id: "f-note", name: "note", autocomplete: "off", maxlength: "200", value: existing?.note ?? "" })),
   );
   recordFields.replaceChildren(...fields);
@@ -1084,6 +1087,49 @@ function recordFromForm() {
 }
 
 // The line under the form that says what the record means before saving.
+// The one shown player still without an amount, and what makes the game add
+// up to 0, or null when that isn't clear (none or several empty, or a typo).
+function lastPlayerFill() {
+  const rows = [...recordFields.querySelectorAll(".player-row:not([hidden])")];
+  const empty = rows.filter((row) => !row.querySelector("input[name^='amount-']").value.trim());
+  const record = recordFromForm();
+  const amounts = Object.values(record.amounts);
+  if (empty.length !== 1 || !amounts.length || !amounts.every(Number.isFinite)) {
+    return null;
+  }
+  const total = Math.round(amounts.reduce((sum, amount) => sum + amount, 0) * 100) / 100;
+  if (total === 0) {
+    return null;
+  }
+  return { memberId: empty[0].dataset.member, amount: -total, currency: record.currency };
+}
+
+function updateFillLast() {
+  const button = document.getElementById("fill-last");
+  const fill = lastPlayerFill();
+  button.hidden = !fill;
+  if (fill) {
+    button.textContent = t("fillLast", {
+      name: nameOf(fill.memberId),
+      result: t(fill.amount > 0 ? "won" : "lost"),
+      amount: money(Math.abs(fill.amount), fill.currency),
+    });
+  }
+}
+
+// Fills that player's Won/Lost and amount, then moves on to Save.
+function fillLastPlayer() {
+  const fill = lastPlayerFill();
+  if (!fill) {
+    return;
+  }
+  const id = CSS.escape(fill.memberId);
+  recordForm.querySelector(`input[name="side-${id}"][value="${fill.amount > 0 ? "won" : "lost"}"]`).checked = true;
+  recordForm.querySelector(`input[name="amount-${id}"]`).value = amountForInput(Math.abs(fill.amount));
+  updateLivePreview();
+  document.getElementById("record-save").focus();
+}
+
 function updateLivePreview() {
   const note = document.getElementById("live-note");
   if (!note) {
@@ -1094,6 +1140,7 @@ function updateLivePreview() {
   if (recordType === "card") {
     const amounts = Object.values(record.amounts).filter(Number.isFinite);
     const total = cardTotal(Object.fromEntries(amounts.map((amount, index) => [index, amount])));
+    updateFillLast();
     if (amounts.length < 2) {
       note.textContent = "";
     } else if (Math.abs(total) < 0.005) {
