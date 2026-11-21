@@ -14,6 +14,8 @@
   --chart-win: #2a78d6;
   --chart-loss: #e34948;
   --chart-baseline: #c9c7c1;
+  /* A thin ring so dark avatar circles stand out on a dark page. */
+  --avatar-ring: transparent;
   --radius: 12px;
   color-scheme: light dark;
 }
@@ -35,6 +37,7 @@
     --chart-win: #3987e5;
     --chart-loss: #e66767;
     --chart-baseline: #55554f;
+    --avatar-ring: rgb(255 255 255 / 35%);
   }
 }
 
@@ -52,6 +55,7 @@
   --chart-win: #3987e5;
   --chart-loss: #e66767;
   --chart-baseline: #55554f;
+  --avatar-ring: rgb(255 255 255 / 35%);
   color-scheme: dark;
 }
 
@@ -830,4 +834,26 @@ dialog::backdrop {
 /* Card form: fills the one player left so the game adds up to 0. */
 .fill-last {
   margin-top: 8px;
+}
+
+/* The coloured circle before a name, with its first letter. */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.6em;
+  height: 1.6em;
+  margin-right: 0.4em;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--avatar-ring);
+  vertical-align: middle;
+}
+
+.avatar::before {
+  content: attr(data-initial);
+  color: #ffffff;
+  font-size: 0.8em;
+  font-weight: 700;
+  line-height: 1;
 }

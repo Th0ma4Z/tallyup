@@ -34,6 +34,10 @@ const BACKUP_REMINDER_MS = 7 * 86_400_000;
 // Light, dark or follow the system, per device (index.html applies it early).
 const THEME_KEY = "tallyup.theme";
 const THEME_LABELS = { system: "themeSystem", light: "themeLight", dark: "themeDark" };
+// Colours for the circle before each name: white initials stay readable
+// (5:1 or more) on every one. Given in the order people were added, so the
+// first eight all differ and a rename keeps the colour.
+const AVATAR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#b45309", "#00695c", "#ad1457", "#6d4c41"];
 const RATES_URL = "https://api.frankfurter.dev/v1/latest?from=EUR";
 // The currencies the exchange-rate service covers.
 export const CURRENCIES = [
@@ -558,6 +562,20 @@ function goToRestore() {
 }
 
 // A list of names with signed amounts in the main currency, biggest win first.
+// A coloured circle with the name's first letter. The letter comes from CSS,
+// so screen readers and copied text get the name only once.
+function avatar(memberId) {
+  const name = nameOf(memberId);
+  const position = Math.max(0, book.members.findIndex((member) => member.id === memberId));
+  const first = typeof Intl.Segmenter === "function" ? new Intl.Segmenter().segment(name)[Symbol.iterator]().next().value?.segment : [...name][0];
+  return h("span", {
+    class: "avatar",
+    "aria-hidden": "true",
+    "data-initial": (first ?? "?").toLocaleUpperCase(),
+    style: `background-color: ${AVATAR_COLORS[position % AVATAR_COLORS.length]}`,
+  });
+}
+
 function amountList(totals, emptyText) {
   const entries = Object.entries(totals).filter(([, amount]) => Math.abs(amount) >= 0.005);
   if (!entries.length) {
@@ -567,7 +585,7 @@ function amountList(totals, emptyText) {
   return h(
     "ul",
     { class: "amount-list" },
-    entries.map(([id, amount]) => h("li", {}, h("span", { class: "name", text: nameOf(id) }), h("span", { class: amountClass(amount), text: signedMoney(amount) }))),
+    entries.map(([id, amount]) => h("li", {}, h("span", { class: "name" }, avatar(id), nameOf(id)), h("span", { class: amountClass(amount), text: signedMoney(amount) }))),
   );
 }
 
@@ -894,7 +912,7 @@ function openRecordDialog(type, existing = null, next = null) {
         h(
           "div",
           { class: "player-row", "data-member": member.id, hidden: others.includes(member) },
-          h("span", { class: "player-name", id: `p-${member.id}`, text: member.name }),
+          h("span", { class: "player-name", id: `p-${member.id}` }, avatar(member.id), member.name),
           h(
             "div",
             { class: "choice-group", role: "radiogroup", "aria-labelledby": `p-${member.id}` },
@@ -1290,7 +1308,7 @@ function renderSettle() {
           { class: "amount-list" },
           book.members.map((member) => {
             const amount = balances[member.id] ?? 0;
-            return h("li", {}, h("span", { class: "name", text: member.name }), h("span", { class: amountClass(amount), text: balanceText(amount) }));
+            return h("li", {}, h("span", { class: "name" }, avatar(member.id), member.name), h("span", { class: amountClass(amount), text: balanceText(amount) }));
           }),
         ),
       ),
@@ -1523,7 +1541,7 @@ function renderPeople() {
             h(
               "div",
               {},
-              h("div", { class: "member-name", text: member.name }),
+              h("div", { class: "member-name" }, avatar(member.id), member.name),
               h("div", { class: "muted" }, h("span", { text: `${t("recordsOf", { n: count })} · ${t("totalLabel")} ` }), h("span", { class: amountClass(total), text: signedMoney(total) })),
             ),
             h(
