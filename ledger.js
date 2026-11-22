@@ -404,6 +404,24 @@ export function memberIsUsed(memberId, records) {
   return records.some((record) => peopleIn(record).includes(memberId));
 }
 
+// Rows of cells as CSV text (RFC 4180): commas between cells, CRLF between
+// rows, and quotes around any cell with a comma, quote or line break. Text
+// starting with = + - @ gets a leading ' so a spreadsheet won't run it as a
+// formula. Numbers are written as they are.
+export function csvText(rows) {
+  const cell = (value) => {
+    if (typeof value === "number") {
+      return String(value);
+    }
+    let text = String(value ?? "");
+    if (/^[=+\-@\t\r]/.test(text)) {
+      text = `'${text}`;
+    }
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  return rows.map((row) => row.map(cell).join(",")).join("\r\n");
+}
+
 // The records dated from..to, both days included. An empty end is open.
 // Dates are "YYYY-MM-DD", so comparing the text compares the days.
 export function recordsBetween(records, from = "", to = "") {

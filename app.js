@@ -1,8 +1,11 @@
 // Connects the page to the money rules in ledger.js.
 
 import {
+  betResult,
   buildBackup,
   cardTotal,
+  convert,
+  csvText,
   filterRecords,
   isRealDate,
   loadBook,
@@ -13,14 +16,13 @@ import {
   parseBackup,
   recordBalances,
   recordProblem,
+  recordsBetween,
   recordWinnings,
   roundMoney,
   settlementPlan,
   splitSharesLeft,
   STORAGE_KEY,
-  recordsBetween,
   sumByMember,
-  betResult,
 } from "./ledger.js";
 import { decimalMark, getLang, LANGS, locale, setLang, t } from "./i18n.js";
 
@@ -667,8 +669,12 @@ function searchResults() {
   ];
 }
 
+// "打牌", "赌球", "AA 平摊" or "还款" in the current language.
+function typeName(type) {
+  return t({ card: "typeCard", bet: "typeBet", split: "typeSplit", payment: "typePayment" }[type]);
+}
+
 function renderRecord(record, { showDate = false } = {}) {
-  const typeKey = { card: "typeCard", bet: "typeBet", split: "typeSplit", payment: "typePayment" }[record.type];
   const body = [];
   if (record.type === "card") {
     body.push(
@@ -730,7 +736,7 @@ function renderRecord(record, { showDate = false } = {}) {
       "div",
       { class: "record-head" },
       showDate ? h("span", { class: "record-date", text: longDate(record.date) }) : null,
-      h("span", { class: "badge badge-type", text: t(typeKey) }),
+      h("span", { class: "badge badge-type", text: typeName(record.type) }),
       record.currency !== book.settings.currency ? h("span", { class: "badge badge-muted", text: record.currency }) : null,
       record.settled ? h("span", { class: "badge badge-muted", text: t("settledBadge") }) : null,
     ),
@@ -741,8 +747,8 @@ function renderRecord(record, { showDate = false } = {}) {
       // A payment is made from the settle page, so it can be deleted but not edited.
       record.type === "payment"
         ? null
-        : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${t(typeKey)}`, onclick: () => editRecord(record) }),
-      h("button", { type: "button", class: "button-secondary button-danger", text: t("delete"), "aria-label": `${t("delete")} ${t(typeKey)}`, onclick: () => deleteRecord(record) }),
+        : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${typeName(record.type)}`, onclick: () => editRecord(record) }),
+      h("button", { type: "button", class: "button-secondary button-danger", text: t("delete"), "aria-label": `${t("delete")} ${typeName(record.type)}`, onclick: () => deleteRecord(record) }),
     ),
   );
 }
@@ -1504,6 +1510,12 @@ function dayShareText(day) {
 
 // One record as a line of text, in the record's own currency.
 function recordShareLine(record) {
+  const line = t("shareLine", { type: typeName(record.type), text: recordContent(record) });
+  return record.note ? `${line} · ${record.note}` : line;
+}
+
+// What a record says, without its type or note, in its own currency.
+function recordContent(record) {
   const amountOf = (value) => money(value, record.currency);
   let text;
   if (record.type === "card") {
@@ -1522,9 +1534,7 @@ function recordShareLine(record) {
   } else {
     text = t("splitSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount), n: record.participantIds.length, share: amountOf(roundMoney(record.amount / record.participantIds.length)) });
   }
-  const typeKey = { card: "typeCard", bet: "typeBet", split: "typeSplit", payment: "typePayment" }[record.type];
-  const line = t("shareLine", { type: t(typeKey), text });
-  return record.note ? `${line} · ${record.note}` : line;
+  return text;
 }
 
 function settlementText(transfers) {
@@ -1919,6 +1929,13 @@ function renderMore() {
       restoreInput,
       h("div", { id: "restore-area" }),
     ),
+    h(
+      "section",
+      { class: "card", "aria-labelledby": "csv-heading" },
+      h("h2", { id: "csv-heading", text: t("csvTitle") }),
+      h("p", { class: "hint", text: t(book.records.length ? "csvHelp" : "csvEmpty") }),
+      h("button", { type: "button", class: "button-secondary", id: "csv-button", text: t("csvDownload"), disabled: !book.records.length, onclick: exportCsv }),
+    ),
   ];
 }
 
@@ -1953,16 +1970,20 @@ function changeSetting(changes, focusId) {
 // The time is recorded only once the file was made and its download started.
 // Browsers don't tell a page whether the file was then saved, so the status
 // says "download started", never "saved".
+// Hands the browser a file to download. Throws if the file can't be made.
+function saveFile(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = h("a", { href: url, download: name });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function downloadBackup() {
   const file = `tallyup-backup-${localDateKey(new Date())}.json`;
   try {
-    const blob = new Blob([JSON.stringify(buildBackup(book), null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = h("a", { href: url, download: file });
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    saveFile(file, JSON.stringify(buildBackup(book), null, 2), "application/json");
   } catch {
     showToast(t("backupFailed"));
     return;
@@ -1983,6 +2004,44 @@ function downloadBackup() {
   const warning = document.getElementById("backup-warning");
   if (warning) {
     warning.hidden = timeKept;
+  }
+  showToast(t("downloaded", { file }));
+}
+
+// Every record as a spreadsheet row, oldest first. Each person's column holds
+// card and bet wins and losses in the main currency, so a column adds up to
+// their total on the settle page; shared costs and payments are described in
+// words only. The byte-order mark lets Excel read Chinese correctly.
+function recordsCsv() {
+  const currency = book.settings.currency;
+  const header = [
+    t("date"),
+    t("csvType"),
+    t("csvWhat"),
+    t("note"),
+    t("currency"),
+    t("settledBadge"),
+    ...book.members.map((member) => t("csvMemberColumn", { name: member.name, currency })),
+  ];
+  const ordered = book.records.map((record, index) => [record, index]).sort(([a, i], [b, j]) => a.date.localeCompare(b.date) || i - j);
+  const rows = ordered.map(([record]) => {
+    const winnings = recordWinnings(record);
+    const cells = book.members.map((member) => {
+      const converted = member.id in winnings ? convert(winnings[member.id], record.currency, currency, rates) : null;
+      return converted === null ? "" : roundMoney(converted);
+    });
+    return [record.date, typeName(record.type), recordContent(record), record.note ?? "", record.currency, record.settled ? t("csvYes") : "", ...cells];
+  });
+  return `\uFEFF${csvText([header, ...rows])}\r\n`;
+}
+
+function exportCsv() {
+  const file = `tallyup-records-${localDateKey(new Date())}.csv`;
+  try {
+    saveFile(file, recordsCsv(), "text/csv;charset=utf-8");
+  } catch {
+    showToast(t("csvFailed"));
+    return;
   }
   showToast(t("downloaded", { file }));
 }
