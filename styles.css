@@ -918,3 +918,17 @@ dialog::backdrop {
   font: inherit;
   cursor: pointer;
 }
+
+/* Settle page: "me" chosen on More, in large type at the top. */
+.me-amount {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  /* Long languages wrap instead of running off a narrow screen. */
+  white-space: normal;
+}
+
+.transfer-list li.is-mine .name,
+.transfer-list li.is-mine .amount {
+  font-weight: 700;
+}

@@ -40,6 +40,9 @@ const BACKUP_REMINDER_MS = 7 * 86_400_000;
 // Light, dark or follow the system, per device (index.html applies it early).
 const THEME_KEY = "tallyup.theme";
 const THEME_LABELS = { system: "themeSystem", light: "themeLight", dark: "themeDark" };
+// Which member is "me" on this device, for the settle page. Per device, since
+// each phone belongs to a different person.
+const ME_KEY = "tallyup.me";
 // Colours for the circle before each name: white initials stay readable
 // (5:1 or more) on every one. Given in the order people were added, so the
 // first eight all differ and a rename keeps the colour.
@@ -1395,11 +1398,51 @@ function renderTotals() {
   );
 }
 
+// The member chosen as "me" on More, or null if none (or they're gone).
+function meId() {
+  let id = null;
+  try {
+    id = window.localStorage.getItem(ME_KEY);
+  } catch {
+    // Storage can't be read: nobody is "me".
+  }
+  return book.members.some((member) => member.id === id) ? id : null;
+}
+
+function changeMe(id) {
+  try {
+    if (id) {
+      window.localStorage.setItem(ME_KEY, id);
+    } else {
+      window.localStorage.removeItem(ME_KEY);
+    }
+  } catch {
+    showToast(t("meNotKept"));
+  }
+}
+
 function renderSettle() {
   const currency = book.settings.currency;
   const unsettled = book.records.filter((record) => !record.settled);
-  const { balances, transfers, missing } = settlementPlan(book.records, currency, rates);
+  const { balances, transfers: planned, missing } = settlementPlan(book.records, currency, rates);
+  // "Me" first: my own transfers lead, the rest keep their order.
+  const me = meId();
+  const isMine = (transfer) => Boolean(me) && (transfer.from === me || transfer.to === me);
+  const transfers = [...planned.filter(isMine), ...planned.filter((transfer) => !isMine(transfer))];
+  const mine = me ? balances[me] ?? 0 : null;
   const parts = [
+    me
+      ? h(
+          "section",
+          { class: "card me-summary", id: "me-summary", "aria-labelledby": "me-heading" },
+          h("h2", { id: "me-heading", text: t("meTitle", { name: nameOf(me) }) }),
+          h("p", {
+            class: `me-amount ${amountClass(mine)}`,
+            id: "me-amount",
+            text: mine >= 0.005 ? t("meOwed", { amount: money(mine) }) : mine <= -0.005 ? t("meOwes", { amount: money(-mine) }) : t("meEven"),
+          }),
+        )
+      : null,
     h(
       "section",
       { class: "card", "aria-labelledby": "settle-heading" },
@@ -1416,7 +1459,7 @@ function renderSettle() {
               const names = { from: nameOf(transfer.from), to: nameOf(transfer.to) };
               return h(
                 "li",
-                { class: transfer.refund ? "refund" : null },
+                { class: [transfer.refund ? "refund" : "", isMine(transfer) ? "is-mine" : ""].join(" ").trim() || null },
                 h("span", { class: "name", text: t(transfer.refund ? "refundLine" : "payLine", names) }),
                 h("span", { class: "amount", text: amount }),
                 h(
@@ -1978,6 +2021,13 @@ function renderMore() {
         "select",
         { id: "theme-select", onchange: (event) => changeTheme(event.target.value) },
         Object.entries(THEME_LABELS).map(([theme, label]) => h("option", { value: theme, text: t(label), selected: theme === currentTheme() })),
+      ),
+      h("label", { for: "me-select", text: t("meLabel") }),
+      h(
+        "select",
+        { id: "me-select", onchange: (event) => changeMe(event.target.value) },
+        h("option", { value: "", text: t("meNone") }),
+        book.members.map((member) => h("option", { value: member.id, text: member.name, selected: member.id === meId() })),
       ),
       h("label", { for: "currency-select", text: t("mainCurrency") }),
       currencyInput,
