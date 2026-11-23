@@ -11,6 +11,7 @@ import {
   loadBook,
   localDateKey,
   memberIsUsed,
+  memberStats,
   monthlyWinnings,
   parseAmount,
   parseBackup,
@@ -1755,6 +1756,7 @@ function renderPerson(member) {
   return [
     h("button", { type: "button", class: "button-secondary back-button", id: "back-to-people", text: t("backToPeople"), onclick: closePerson }),
     summary,
+    renderPersonStats(member),
     h(
       "section",
       { class: "card", "aria-labelledby": "person-records-heading" },
@@ -1763,6 +1765,42 @@ function renderPerson(member) {
       list,
     ),
   ];
+}
+
+// Games played and won, win rate, and the biggest win and loss, each a tap
+// away from its day.
+function renderPersonStats(member) {
+  const stats = memberStats(book.records, member.id, book.settings.currency, rates);
+  const percent = (part, whole) => new Intl.NumberFormat(locale(), { style: "percent", maximumFractionDigits: 0 }).format(part / whole);
+  const extreme = (key, found) =>
+    found
+      ? h(
+          "li",
+          {},
+          h(
+            "button",
+            { type: "button", class: "stats-game", id: `stats-${key}`, onclick: () => goToRecord(found.record) },
+            h("span", { class: "person-date", text: t(key === "best" ? "statsBest" : "statsWorst", { date: longDate(found.record.date) }) }),
+            h("span", { class: amountClass(found.amount), text: signedMoney(found.amount, found.record.currency) }),
+          ),
+        )
+      : null;
+  const parts = [];
+  if (stats.games) {
+    parts.push(h("p", { id: "stats-cards", text: t("statsCards", { games: stats.games, wins: stats.wins, rate: percent(stats.wins, stats.games) }) }));
+    if (stats.best || stats.worst) {
+      parts.push(h("ul", { class: "day-list stats-list" }, extreme("best", stats.best), extreme("worst", stats.worst)));
+    }
+  }
+  if (stats.bets) {
+    parts.push(h("p", { id: "stats-bets", text: t("statsBets", { bets: stats.bets, wins: stats.betWins, rate: percent(stats.betWins, stats.bets) }) }));
+  }
+  return h(
+    "section",
+    { class: "card", "aria-labelledby": "stats-heading" },
+    h("h2", { id: "stats-heading", text: t("statsTitle") }),
+    ...(parts.length ? parts : [h("p", { class: "muted", text: t("statsNone") })]),
+  );
 }
 
 // What one record meant for one member: a description, and an amount in the
