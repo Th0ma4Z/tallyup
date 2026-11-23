@@ -14,6 +14,7 @@ import {
   monthlyWinnings,
   parseAmount,
   parseBackup,
+  peopleIn,
   recordBalances,
   recordProblem,
   recordsBetween,
@@ -1392,13 +1393,24 @@ function renderSettle() {
                 { class: transfer.refund ? "refund" : null },
                 h("span", { class: "name", text: t(transfer.refund ? "refundLine" : "payLine", names) }),
                 h("span", { class: "amount", text: amount }),
-                h("button", {
-                  type: "button",
-                  class: "button-secondary paid-button",
-                  text: t("paidButton"),
-                  "aria-label": t("paidButtonLabel", { ...names, amount }),
-                  onclick: () => markPaid(transfer),
-                }),
+                h(
+                  "div",
+                  { class: "transfer-actions" },
+                  h("button", {
+                    type: "button",
+                    class: "button-secondary paid-button",
+                    text: t("paidButton"),
+                    "aria-label": t("paidButtonLabel", { ...names, amount }),
+                    onclick: () => markPaid(transfer),
+                  }),
+                  h("button", {
+                    type: "button",
+                    class: "button-secondary remind-button",
+                    text: t("remindButton"),
+                    "aria-label": t("remindButtonLabel", { ...names, amount }),
+                    onclick: () => shareText(reminderText(transfer), "share-fallback"),
+                  }),
+                ),
               );
             }),
           )
@@ -1535,6 +1547,20 @@ function recordContent(record) {
     text = t("splitSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount), n: record.participantIds.length, share: amountOf(roundMoney(record.amount / record.participantIds.length)) });
   }
   return text;
+}
+
+// A message for the person who pays (or refunds) on one settle line: who and
+// how much, then their records not settled yet, so they can check it. A
+// transfer nets several records together, so it can't be traced to just some.
+function reminderText(transfer) {
+  const names = { from: nameOf(transfer.from), to: nameOf(transfer.to), amount: money(transfer.amount) };
+  const theirs = book.records.filter((record) => !record.settled && peopleIn(record).includes(transfer.from));
+  const lines = [t(transfer.refund ? "remindRefund" : "remindPay", names)];
+  if (theirs.length) {
+    lines.push("", t("remindRecords"), ...theirs.map((record) => `· ${longDate(record.date)} ${recordShareLine(record)}`));
+  }
+  lines.push("", t("remindFooter", { date: longDate(localDateKey(new Date())) }));
+  return lines.join("\n");
 }
 
 function settlementText(transfers) {

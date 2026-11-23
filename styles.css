@@ -605,9 +605,17 @@ dialog::backdrop {
   grid-column: 1;
 }
 
-.paid-button {
+/* Paid, then Remind, stacked beside the name and amount. */
+.transfer-actions {
+  display: flex;
+  flex-direction: column;
   grid-column: 2;
   grid-row: 1 / span 2;
+  gap: 6px;
+}
+
+.paid-button,
+.remind-button {
   padding: 0 14px;
 }
 
