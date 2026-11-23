@@ -309,6 +309,10 @@ export function recordProblem(record, members) {
     if (ids.length < 2) {
       return "cardNeedTwo";
     }
+    // Kept by points: amounts are points × pointValue, in money.
+    if ("pointValue" in record && !(Number.isFinite(record.pointValue) && record.pointValue > 0)) {
+      return "pointValueBad";
+    }
     if (!ids.every((id) => known.has(id) && Number.isFinite(record.amounts[id]))) {
       return "badAmount";
     }

@@ -932,3 +932,16 @@ dialog::backdrop {
 .transfer-list li.is-mine .amount {
   font-weight: 700;
 }
+
+/* Card form: keep score in points, and what they come to in money. */
+.points-row {
+  margin: 4px 0 8px;
+}
+
+.points-row #point-value-field {
+  margin-top: 8px;
+}
+
+.points-preview:empty {
+  display: none;
+}

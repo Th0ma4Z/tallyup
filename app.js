@@ -691,6 +691,7 @@ function renderRecord(record, { showDate = false } = {}) {
           .sort((a, b) => b[1] - a[1])
           .map(([id, amount]) => h("li", {}, h("span", { class: "name", text: nameOf(id) }), h("span", { class: amountClass(amount), text: signedMoney(amount, record.currency) }))),
       ),
+      record.pointValue ? h("p", { class: "muted", text: t("perPoint", { amount: money(record.pointValue, record.currency) }) }) : null,
     );
   } else if (record.type === "bet") {
     body.push(
@@ -928,7 +929,22 @@ function openRecordDialog(type, existing = null, next = null) {
     const players = new Set(Object.keys(existing?.amounts ?? lastCard?.amounts ?? {}));
     const others = players.size ? book.members.filter((member) => !players.has(member.id)) : [];
     const quickAmounts = commonAmounts(book.records);
+    // By points: on when editing such a game, or when the last game was.
+    const pointValue = existing ? existing.pointValue : lastCard?.pointValue;
     fields.push(h("p", { class: "hint", text: t("cardHint") }));
+    fields.push(
+      h(
+        "div",
+        { class: "points-row" },
+        h("label", { class: "chip" }, h("input", { type: "checkbox", name: "by-points", id: "f-by-points", checked: Boolean(pointValue) }), h("span", { text: t("byPoints") })),
+        h(
+          "div",
+          { id: "point-value-field", hidden: !pointValue },
+          field("point-value", t("pointValue"), h("input", { id: "f-point-value", name: "point-value", inputmode: "decimal", autocomplete: "off", value: amountForInput(pointValue) })),
+          h("p", { class: "hint", text: t("pointsHint") }),
+        ),
+      ),
+    );
     if (others.length && !existing) {
       fields.push(h("p", { class: "hint", text: t("cardLastPlayers") }));
     }
@@ -952,7 +968,7 @@ function openRecordDialog(type, existing = null, next = null) {
             autocomplete: "off",
             "aria-labelledby": `p-${member.id}`,
             placeholder: "0",
-            value: amount === undefined ? "" : amountForInput(Math.abs(amount)),
+            value: amount === undefined ? "" : amountForInput(Math.abs(pointValue && existing ? roundMoney(amount / pointValue) : amount)),
           }),
           quickAmounts.length
             ? h(
@@ -1063,6 +1079,7 @@ function openRecordDialog(type, existing = null, next = null) {
   }
   fields.push(h("p", { id: "live-note", class: "live-note", "aria-live": "polite" }));
   if (type === "card") {
+    fields.push(h("p", { class: "hint points-preview", id: "points-preview", "aria-live": "polite" }));
     fields.push(h("button", { type: "button", class: "button-secondary fill-last", id: "fill-last", hidden: true, onclick: fillLastPlayer }));
   }
   fields.push(
@@ -1120,14 +1137,15 @@ function recordFromForm() {
     record.note = note;
   }
   if (recordType === "card") {
+    const typed = typedCardAmounts();
+    const pointValue = cardPointValue();
     record.amounts = {};
-    for (const member of book.members) {
-      const text = String(data.get(`amount-${member.id}`) ?? "").trim();
-      if (text === "") {
-        continue;
-      }
-      const amount = readAmount(text);
-      record.amounts[member.id] = data.get(`side-${member.id}`) === "lost" ? -amount : amount;
+    for (const [id, amount] of Object.entries(typed)) {
+      // A bad point value is reported as such, so the typed numbers stay as they are.
+      record.amounts[id] = pointValue > 0 ? roundMoney(amount * pointValue) : amount;
+    }
+    if (pointValue !== null) {
+      record.pointValue = pointValue;
     }
   } else if (recordType === "bet") {
     record.bettorId = data.get("bettor");
@@ -1194,13 +1212,37 @@ function applyBetPrice() {
   updateLivePreview();
 }
 
+// Each card player's typed number with its sign: money, or points when
+// "by points" is on.
+function typedCardAmounts() {
+  const data = new FormData(recordForm);
+  const typed = {};
+  for (const member of book.members) {
+    const text = String(data.get(`amount-${member.id}`) ?? "").trim();
+    if (text !== "") {
+      const amount = readAmount(text);
+      typed[member.id] = data.get(`side-${member.id}`) === "lost" ? -amount : amount;
+    }
+  }
+  return typed;
+}
+
+// How much one point is worth, NaN if that box isn't a number yet, or null
+// when the game isn't kept by points.
+function cardPointValue() {
+  if (!recordForm.elements["by-points"]?.checked) {
+    return null;
+  }
+  return readAmount(String(recordForm.elements["point-value"].value).trim());
+}
+
 // The one shown player still without an amount, and what makes the game add
 // up to 0, or null when that isn't clear (none or several empty, or a typo).
 function lastPlayerFill() {
   const rows = [...recordFields.querySelectorAll(".player-row:not([hidden])")];
   const empty = rows.filter((row) => !row.querySelector("input[name^='amount-']").value.trim());
-  const record = recordFromForm();
-  const amounts = Object.values(record.amounts);
+  // Typed numbers, so by points it fills in points.
+  const amounts = Object.values(typedCardAmounts());
   if (empty.length !== 1 || !amounts.length || !amounts.every(Number.isFinite)) {
     return null;
   }
@@ -1208,7 +1250,7 @@ function lastPlayerFill() {
   if (total === 0) {
     return null;
   }
-  return { memberId: empty[0].dataset.member, amount: -total, currency: record.currency };
+  return { memberId: empty[0].dataset.member, amount: -total, currency: recordForm.elements.currency.value, byPoints: cardPointValue() !== null };
 }
 
 function updateFillLast() {
@@ -1216,12 +1258,30 @@ function updateFillLast() {
   const fill = lastPlayerFill();
   button.hidden = !fill;
   if (fill) {
-    button.textContent = t("fillLast", {
+    const size = Math.abs(fill.amount);
+    button.textContent = t(fill.byPoints ? "fillLastPoints" : "fillLast", {
       name: nameOf(fill.memberId),
       result: t(fill.amount > 0 ? "won" : "lost"),
-      amount: money(Math.abs(fill.amount), fill.currency),
+      amount: money(size, fill.currency),
+      points: amountForInput(size),
     });
   }
+}
+
+// By points: the point value box, no money shortcuts, and what the points
+// come to in money.
+function updatePointsParts(record) {
+  const byPoints = "pointValue" in record;
+  document.getElementById("point-value-field").hidden = !byPoints;
+  for (const shortcuts of recordFields.querySelectorAll(".quick-amounts")) {
+    shortcuts.hidden = byPoints;
+  }
+  const preview = document.getElementById("points-preview");
+  const entries = Object.entries(record.amounts);
+  preview.textContent =
+    byPoints && record.pointValue > 0 && entries.length && entries.every(([, amount]) => Number.isFinite(amount))
+      ? t("pointsPreview", { list: entries.map(([id, amount]) => `${nameOf(id)} ${signedMoney(amount, record.currency)}`).join(t("listSeparator")) })
+      : "";
 }
 
 // A tap on a common amount: fills it in for that player, as if typed.
@@ -1253,6 +1313,7 @@ function updateLivePreview() {
   const record = recordFromForm();
   note.classList.remove("is-off");
   if (recordType === "card") {
+    updatePointsParts(record);
     const amounts = Object.values(record.amounts).filter(Number.isFinite);
     const total = cardTotal(Object.fromEntries(amounts.map((amount, index) => [index, amount])));
     updateFillLast();
@@ -1314,6 +1375,11 @@ function saveRecordFromForm(event) {
   let problem = recordProblem(record, book.members);
   if (recordType === "card" && Object.values(record.amounts).some((amount) => !Number.isFinite(amount))) {
     problem = "badAmount";
+  }
+  // Points that add up to 0 can miss by a cent once turned into money; only
+  // the form still has the points to tell.
+  if (problem === "cardNotZero" && record.pointValue && Math.abs(cardTotal(typedCardAmounts())) < 0.005) {
+    problem = "pointsRounding";
   }
   if (problem) {
     recordError.textContent = t(problem);
@@ -1604,6 +1670,9 @@ function recordContent(record) {
       .sort((a, b) => b[1] - a[1])
       .map(([id, amount]) => `${nameOf(id)} ${signedMoney(amount, record.currency)}`)
       .join(t("listSeparator"));
+    if (record.pointValue) {
+      text = `${text} · ${t("perPoint", { amount: amountOf(record.pointValue) })}`;
+    }
   } else if (record.type === "bet") {
     const summary = t("betSummary", { bettor: nameOf(record.bettorId), holder: nameOf(record.holderId), stake: amountOf(record.stake), payout: amountOf(record.payout) });
     text = `${summary} · ${resultText(record)} ${signedMoney(betResult(record), record.currency)}`;
