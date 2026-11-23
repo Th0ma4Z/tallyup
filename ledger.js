@@ -451,6 +451,25 @@ export function memberStats(records, memberId, currency, rates) {
   return stats;
 }
 
+// The amounts used most in the last `recent` card games (win or loss alike),
+// up to `count` of them, smallest first. Ties go to the smaller amount.
+export function commonAmounts(records, { recent = 30, count = 3 } = {}) {
+  const uses = new Map();
+  for (const record of records.filter((item) => item.type === "card").slice(-recent)) {
+    for (const amount of Object.values(record.amounts)) {
+      const size = Math.abs(amount);
+      if (size > 0) {
+        uses.set(size, (uses.get(size) ?? 0) + 1);
+      }
+    }
+  }
+  return [...uses]
+    .sort(([a, aUses], [b, bUses]) => bUses - aUses || a - b)
+    .slice(0, count)
+    .map(([size]) => size)
+    .sort((a, b) => a - b);
+}
+
 // The records dated from..to, both days included. An empty end is open.
 // Dates are "YYYY-MM-DD", so comparing the text compares the days.
 export function recordsBetween(records, from = "", to = "") {

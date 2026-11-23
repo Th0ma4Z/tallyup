@@ -4,6 +4,7 @@ import {
   betResult,
   buildBackup,
   cardTotal,
+  commonAmounts,
   convert,
   csvText,
   filterRecords,
@@ -923,6 +924,7 @@ function openRecordDialog(type, existing = null, next = null) {
     const lastCard = [...book.records].reverse().find((record) => record.type === "card");
     const players = new Set(Object.keys(existing?.amounts ?? lastCard?.amounts ?? {}));
     const others = players.size ? book.members.filter((member) => !players.has(member.id)) : [];
+    const quickAmounts = commonAmounts(book.records);
     fields.push(h("p", { class: "hint", text: t("cardHint") }));
     if (others.length && !existing) {
       fields.push(h("p", { class: "hint", text: t("cardLastPlayers") }));
@@ -949,6 +951,21 @@ function openRecordDialog(type, existing = null, next = null) {
             placeholder: "0",
             value: amount === undefined ? "" : amountForInput(Math.abs(amount)),
           }),
+          quickAmounts.length
+            ? h(
+                "div",
+                { class: "quick-amounts" },
+                quickAmounts.map((size) =>
+                  h("button", {
+                    type: "button",
+                    class: "quick-amount",
+                    text: amountForInput(size),
+                    "aria-label": t("quickAmountLabel", { name: member.name, amount: amountForInput(size) }),
+                    onclick: () => fillQuickAmount(member.id, size),
+                  }),
+                ),
+              )
+            : null,
         ),
       );
     }
@@ -1202,6 +1219,14 @@ function updateFillLast() {
       amount: money(Math.abs(fill.amount), fill.currency),
     });
   }
+}
+
+// A tap on a common amount: fills it in for that player, as if typed.
+function fillQuickAmount(memberId, size) {
+  const input = recordForm.querySelector(`input[name="amount-${CSS.escape(memberId)}"]`);
+  input.value = amountForInput(size);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.focus();
 }
 
 // Fills that player's Won/Lost and amount, then moves on to Save.

@@ -898,3 +898,23 @@ dialog::backdrop {
 #range-all {
   margin-bottom: 12px;
 }
+
+/* Card form: amounts used most lately, one tap to fill in. */
+.quick-amounts {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quick-amount {
+  min-width: 52px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
