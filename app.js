@@ -280,6 +280,30 @@ function readAmount(text) {
   return parseAmount(text, decimalMark());
 }
 
+// Settings kept on this device only (not in the book): reading never throws
+// and gives null when the value is missing or storage is blocked; writing
+// says whether it worked, and null removes the value.
+function deviceGet(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function deviceSet(key, value) {
+  try {
+    if (value === null) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, value);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function amountClass(amount) {
   if (amount > 0.004) {
     return "amount win";
@@ -412,7 +436,21 @@ function renderRecords() {
     return renderSearch();
   }
   const dayRecords = book.records.filter((record) => record.date === selectedDate);
-  const parts = [];
+  return [
+    backupReminder(),
+    h("button", { type: "button", class: "button-secondary search-open", id: "search-open", text: t("searchOpen"), onclick: openSearch }),
+    renderDayPicker(),
+    ...renderAddButtons(),
+    renderDayResults(dayRecords),
+    dayRecords.length
+      ? h("ul", { class: "record-list", "aria-label": t("tabRecords") }, dayRecords.map(renderRecord))
+      : h("p", { class: "muted", text: t("noRecordsDay") }),
+    renderDaysWithRecords(),
+  ];
+}
+
+// The day's heading, ‹ date ›, and a Today button when another day is shown.
+function renderDayPicker() {
   const dateInput = h("input", {
     type: "date",
     id: "day-input",
@@ -426,26 +464,26 @@ function renderRecords() {
       }
     },
   });
-  parts.push(
-    backupReminder(),
-    h("button", { type: "button", class: "button-secondary search-open", id: "search-open", text: t("searchOpen"), onclick: openSearch }),
+  return h(
+    "section",
+    { class: "card", "aria-labelledby": "day-heading" },
+    h("h2", { id: "day-heading", text: longDate(selectedDate) }),
     h(
-      "section",
-      { class: "card", "aria-labelledby": "day-heading" },
-      h("h2", { id: "day-heading", text: longDate(selectedDate) }),
-      h(
-        "div",
-        { class: "date-row" },
-        h("button", { type: "button", class: "button-secondary", "aria-label": t("prevDay"), text: "‹", onclick: () => moveDay(-1) }),
-        dateInput,
-        h("button", { type: "button", class: "button-secondary", "aria-label": t("nextDay"), text: "›", onclick: () => moveDay(1) }),
-      ),
-      selectedDate !== localDateKey(new Date())
-        ? h("button", { type: "button", class: "button-secondary today-button", text: t("today"), onclick: () => setDay(localDateKey(new Date())) })
-        : null,
+      "div",
+      { class: "date-row" },
+      h("button", { type: "button", class: "button-secondary", "aria-label": t("prevDay"), text: "‹", onclick: () => moveDay(-1) }),
+      dateInput,
+      h("button", { type: "button", class: "button-secondary", "aria-label": t("nextDay"), text: "›", onclick: () => moveDay(1) }),
     ),
+    selectedDate !== localDateKey(new Date())
+      ? h("button", { type: "button", class: "button-secondary today-button", text: t("today"), onclick: () => setDay(localDateKey(new Date())) })
+      : null,
   );
+}
 
+// Add buttons, or a pointer to People until there are two members.
+function renderAddButtons() {
+  const parts = [];
   if (book.members.length < 2) {
     parts.push(
       h(
@@ -478,55 +516,56 @@ function renderRecords() {
       ),
     );
   }
+  return parts;
+}
 
+// The day's wins and losses, with Share this day.
+function renderDayResults(dayRecords) {
   const { totals, missing } = sumByMember(dayRecords, recordWinnings, book.settings.currency, rates);
-  parts.push(
-    h(
-      "section",
-      { class: "card", "aria-labelledby": "day-results-heading" },
-      h("h2", { id: "day-results-heading", text: t("dayResults") }),
-      amountList(totals, t("dayResultsEmpty")),
-      missingNote(missing),
-      dayRecords.length
-        ? h("button", { type: "button", class: "button-secondary share-day", id: "share-day", text: t("shareDay"), onclick: () => shareText(dayShareText(selectedDate), "day-share-fallback") })
-        : null,
-      h("div", { id: "day-share-fallback" }),
-    ),
-  );
-
-  parts.push(
+  return h(
+    "section",
+    { class: "card", "aria-labelledby": "day-results-heading" },
+    h("h2", { id: "day-results-heading", text: t("dayResults") }),
+    amountList(totals, t("dayResultsEmpty")),
+    missingNote(missing),
     dayRecords.length
-      ? h("ul", { class: "record-list", "aria-label": t("tabRecords") }, dayRecords.map(renderRecord))
-      : h("p", { class: "muted", text: t("noRecordsDay") }),
+      ? h("button", { type: "button", class: "button-secondary share-day", id: "share-day", text: t("shareDay"), onclick: () => shareText(dayShareText(selectedDate), "day-share-fallback") })
+      : null,
+    h("div", { id: "day-share-fallback" }),
   );
+}
 
-  const days = [...new Set(book.records.map((record) => record.date))].sort().reverse();
-  if (days.length) {
-    parts.push(
-      h(
-        "section",
-        { class: "card", "aria-labelledby": "days-heading", style: "margin-top:14px" },
-        h("h2", { id: "days-heading", text: t("allDays") }),
+// Every day that has records, newest first, with how many each has.
+function renderDaysWithRecords() {
+  const counts = new Map();
+  for (const record of book.records) {
+    counts.set(record.date, (counts.get(record.date) ?? 0) + 1);
+  }
+  const days = [...counts.keys()].sort().reverse();
+  if (!days.length) {
+    return null;
+  }
+  return h(
+    "section",
+    { class: "card", "aria-labelledby": "days-heading", style: "margin-top:14px" },
+    h("h2", { id: "days-heading", text: t("allDays") }),
+    h(
+      "ul",
+      { class: "day-list" },
+      days.map((day) =>
         h(
-          "ul",
-          { class: "day-list" },
-          days.map((day) =>
-            h(
-              "li",
-              {},
-              h(
-                "button",
-                { type: "button", "aria-current": day === selectedDate ? "date" : null, onclick: () => setDay(day) },
-                h("span", { text: longDate(day) }),
-                h("span", { class: "muted", text: t("recordCount", { n: book.records.filter((record) => record.date === day).length }) }),
-              ),
-            ),
+          "li",
+          {},
+          h(
+            "button",
+            { type: "button", "aria-current": day === selectedDate ? "date" : null, onclick: () => setDay(day) },
+            h("span", { text: longDate(day) }),
+            h("span", { class: "muted", text: t("recordCount", { n: counts.get(day) }) }),
           ),
         ),
       ),
-    );
-  }
-  return parts;
+    ),
+  );
 }
 
 function moveDay(days) {
@@ -552,12 +591,7 @@ function backupReminder() {
     return null;
   }
   const started = lastBackupTime();
-  let backedUpRecords = null;
-  try {
-    backedUpRecords = window.localStorage.getItem(BACKUP_RECORDS_KEY);
-  } catch {
-    // Can't read it: treat the records as not backed up.
-  }
+  const backedUpRecords = deviceGet(BACKUP_RECORDS_KEY);
   if (started && (Date.now() - started.getTime() <= BACKUP_REMINDER_MS || backedUpRecords === recordsFingerprint(book.records))) {
     return null;
   }
@@ -922,161 +956,7 @@ function openRecordDialog(type, existing = null, next = null) {
     field("date", t("date"), h("input", { type: "date", id: "f-date", name: "date", value: date, required: true })),
     field("currency", t("currency"), currencySelect("f-currency", "currency", currency)),
   );
-  if (type === "card") {
-    // Start with the people in this game (when editing) or in the last card
-    // game; everyone else is one tap away.
-    const lastCard = [...book.records].reverse().find((record) => record.type === "card");
-    const players = new Set(Object.keys(existing?.amounts ?? lastCard?.amounts ?? {}));
-    const others = players.size ? book.members.filter((member) => !players.has(member.id)) : [];
-    const quickAmounts = commonAmounts(book.records);
-    // By points: on when editing such a game, or when the last game was.
-    const pointValue = existing ? existing.pointValue : lastCard?.pointValue;
-    fields.push(h("p", { class: "hint", text: t("cardHint") }));
-    fields.push(
-      h(
-        "div",
-        { class: "points-row" },
-        h("label", { class: "chip" }, h("input", { type: "checkbox", name: "by-points", id: "f-by-points", checked: Boolean(pointValue) }), h("span", { text: t("byPoints") })),
-        h(
-          "div",
-          { id: "point-value-field", hidden: !pointValue },
-          field("point-value", t("pointValue"), h("input", { id: "f-point-value", name: "point-value", inputmode: "decimal", autocomplete: "off", value: amountForInput(pointValue) })),
-          h("p", { class: "hint", text: t("pointsHint") }),
-        ),
-      ),
-    );
-    if (others.length && !existing) {
-      fields.push(h("p", { class: "hint", text: t("cardLastPlayers") }));
-    }
-    for (const member of book.members) {
-      const amount = existing?.amounts?.[member.id];
-      const lost = amount < 0;
-      fields.push(
-        h(
-          "div",
-          { class: "player-row", "data-member": member.id, hidden: others.includes(member) },
-          h("span", { class: "player-name", id: `p-${member.id}` }, avatar(member.id), member.name),
-          h(
-            "div",
-            { class: "choice-group", role: "radiogroup", "aria-labelledby": `p-${member.id}` },
-            chip("radio", `side-${member.id}`, "won", t("won"), !lost),
-            chip("radio", `side-${member.id}`, "lost", t("lost"), lost),
-          ),
-          h("input", {
-            name: `amount-${member.id}`,
-            inputmode: "decimal",
-            autocomplete: "off",
-            "aria-labelledby": `p-${member.id}`,
-            placeholder: "0",
-            value: amount === undefined ? "" : amountForInput(Math.abs(pointValue && existing ? roundMoney(amount / pointValue) : amount)),
-          }),
-          quickAmounts.length
-            ? h(
-                "div",
-                { class: "quick-amounts" },
-                quickAmounts.map((size) =>
-                  h("button", {
-                    type: "button",
-                    class: "quick-amount",
-                    text: amountForInput(size),
-                    "aria-label": t("quickAmountLabel", { name: member.name, amount: amountForInput(size) }),
-                    onclick: () => fillQuickAmount(member.id, size),
-                  }),
-                ),
-              )
-            : null,
-        ),
-      );
-    }
-    if (others.length) {
-      const showOthers = h("button", {
-        type: "button",
-        class: "button-secondary show-others",
-        id: "show-others",
-        text: t("showOthers", { n: others.length }),
-        onclick: () => {
-          for (const row of recordFields.querySelectorAll(".player-row[hidden]")) {
-            row.hidden = false;
-          }
-          showOthers.remove();
-          recordFields.querySelector(`[name="amount-${CSS.escape(others[0].id)}"]`)?.focus();
-        },
-      });
-      fields.push(showOthers);
-    }
-  } else if (type === "bet") {
-    const lastBet = [...book.records].reverse().find((record) => record.type === "bet");
-    fields.push(
-      field("bettor", t("bettor"), memberSelect("f-bettor", "bettor", existing?.bettorId ?? "")),
-      field("holder", t("holder"), memberSelect("f-holder", "holder", existing?.holderId ?? lastBet?.holderId ?? "")),
-      field("stake", t("stake"), h("input", { id: "f-stake", name: "stake", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.stake) })),
-      h(
-        "fieldset",
-        { class: "choice-group price-helper" },
-        h("legend", { text: t("priceHelper") }),
-        chip("radio", "price-kind", "cents", t("priceCents"), true),
-        chip("radio", "price-kind", "odds", t("priceOdds"), false),
-        h("input", { id: "f-price", name: "price", inputmode: "decimal", autocomplete: "off", "aria-label": t("priceValue"), "aria-describedby": "price-note" }),
-        h("p", { class: "hint price-note", id: "price-note", "aria-live": "polite" }),
-      ),
-      field("payout", t("payout"), h("input", { id: "f-payout", name: "payout", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.payout) })),
-      h(
-        "fieldset",
-        { class: "choice-group" },
-        h("legend", { text: t("result") }),
-        chip("radio", "result", "win", t("resultWin"), existing?.result === "win"),
-        chip("radio", "result", "lose", t("resultLose"), existing?.result === "lose"),
-        chip("radio", "result", "cashout", t("resultCashout"), existing?.result === "cashout"),
-      ),
-      h(
-        "div",
-        { id: "cashout-field", hidden: existing?.result !== "cashout" },
-        field("cashout", t("cashoutAmount"), h("input", { id: "f-cashout", name: "cashout", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.cashout) })),
-      ),
-    );
-  } else {
-    // Ticked to start with: this split's people when editing, else the last
-    // split's, else everyone.
-    const lastSplit = [...book.records].reverse().find((record) => record.type === "split");
-    const included = new Set(existing?.participantIds ?? lastSplit?.participantIds ?? book.members.map((member) => member.id));
-    fields.push(
-      field("payer", t("payer"), memberSelect("f-payer", "payer", existing?.payerId ?? "")),
-      field("amount", t("amount"), h("input", { id: "f-amount", name: "amount", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.amount) })),
-      h(
-        "fieldset",
-        { class: "choice-group" },
-        h("legend", { text: t("participants") }),
-        book.members.map((member) => chip("checkbox", "participant", member.id, member.name, included.has(member.id))),
-      ),
-      h(
-        "fieldset",
-        { class: "choice-group" },
-        h("legend", { text: t("splitHow") }),
-        chip("radio", "splitMode", "equal", t("splitEqual"), !existing?.shares),
-        chip("radio", "splitMode", "custom", t("splitCustom"), Boolean(existing?.shares)),
-      ),
-      // One amount box per member; only the ticked people's boxes show.
-      h(
-        "div",
-        { id: "share-fields", hidden: !existing?.shares },
-        book.members.map((member) =>
-          h(
-            "div",
-            { class: "share-row", "data-member": member.id, hidden: !included.has(member.id) },
-            h("label", { for: `share-${member.id}`, text: member.name }),
-            h("input", {
-              id: `share-${member.id}`,
-              name: `share-${member.id}`,
-              inputmode: "decimal",
-              autocomplete: "off",
-              placeholder: "0",
-              value: amountForInput(existing?.shares?.[member.id]),
-            }),
-          ),
-        ),
-      ),
-    );
-  }
+  fields.push(...{ card: cardFields, bet: betFields, split: splitFields }[type](existing));
   fields.push(h("p", { id: "live-note", class: "live-note", "aria-live": "polite" }));
   if (type === "card") {
     fields.push(h("p", { class: "hint points-preview", id: "points-preview", "aria-live": "polite" }));
@@ -1093,6 +973,178 @@ function openRecordDialog(type, existing = null, next = null) {
     recordDialog.scrollTop = 0;
     recordFields.querySelector(".player-row:not([hidden]) input[name^='amount-']")?.focus({ preventScroll: true });
   }
+}
+
+// The most recently added record of a type, or undefined.
+function lastRecordOf(type) {
+  return [...book.records].reverse().find((record) => record.type === type);
+}
+
+// The card form's fields: point value, one row per member, and "show others".
+function cardFields(existing) {
+  const fields = [];
+  // Start with the people in this game (when editing) or in the last card
+  // game; everyone else is one tap away.
+  const lastCard = lastRecordOf("card");
+  const players = new Set(Object.keys(existing?.amounts ?? lastCard?.amounts ?? {}));
+  const others = players.size ? book.members.filter((member) => !players.has(member.id)) : [];
+  const quickAmounts = commonAmounts(book.records);
+  // By points: on when editing such a game, or when the last game was.
+  const pointValue = existing ? existing.pointValue : lastCard?.pointValue;
+  fields.push(h("p", { class: "hint", text: t("cardHint") }));
+  fields.push(
+    h(
+      "div",
+      { class: "points-row" },
+      h("label", { class: "chip" }, h("input", { type: "checkbox", name: "by-points", id: "f-by-points", checked: Boolean(pointValue) }), h("span", { text: t("byPoints") })),
+      h(
+        "div",
+        { id: "point-value-field", hidden: !pointValue },
+        field("point-value", t("pointValue"), h("input", { id: "f-point-value", name: "point-value", inputmode: "decimal", autocomplete: "off", value: amountForInput(pointValue) })),
+        h("p", { class: "hint", text: t("pointsHint") }),
+      ),
+    ),
+  );
+  if (others.length && !existing) {
+    fields.push(h("p", { class: "hint", text: t("cardLastPlayers") }));
+  }
+  for (const member of book.members) {
+    fields.push(playerRow(member, { existing, pointValue, hidden: others.includes(member), quickAmounts }));
+  }
+  if (others.length) {
+    const showOthers = h("button", {
+      type: "button",
+      class: "button-secondary show-others",
+      id: "show-others",
+      text: t("showOthers", { n: others.length }),
+      onclick: () => {
+        for (const row of recordFields.querySelectorAll(".player-row[hidden]")) {
+          row.hidden = false;
+        }
+        showOthers.remove();
+        recordFields.querySelector(`[name="amount-${CSS.escape(others[0].id)}"]`)?.focus();
+      },
+    });
+    fields.push(showOthers);
+  }
+  return fields;
+}
+
+// One player in the card form: name, Won/Lost, amount (points when kept by
+// points), and the common-amount shortcuts.
+function playerRow(member, { existing, pointValue, hidden, quickAmounts }) {
+  const amount = existing?.amounts?.[member.id];
+  const lost = amount < 0;
+  return h(
+    "div",
+    { class: "player-row", "data-member": member.id, hidden },
+    h("span", { class: "player-name", id: `p-${member.id}` }, avatar(member.id), member.name),
+    h(
+      "div",
+      { class: "choice-group", role: "radiogroup", "aria-labelledby": `p-${member.id}` },
+      chip("radio", `side-${member.id}`, "won", t("won"), !lost),
+      chip("radio", `side-${member.id}`, "lost", t("lost"), lost),
+    ),
+    h("input", {
+      name: `amount-${member.id}`,
+      inputmode: "decimal",
+      autocomplete: "off",
+      "aria-labelledby": `p-${member.id}`,
+      placeholder: "0",
+      value: amount === undefined ? "" : amountForInput(Math.abs(pointValue && existing ? roundMoney(amount / pointValue) : amount)),
+    }),
+    quickAmounts.length
+      ? h(
+          "div",
+          { class: "quick-amounts" },
+          quickAmounts.map((size) =>
+            h("button", {
+              type: "button",
+              class: "quick-amount",
+              text: amountForInput(size),
+              "aria-label": t("quickAmountLabel", { name: member.name, amount: amountForInput(size) }),
+              onclick: () => fillQuickAmount(member.id, size),
+            }),
+          ),
+        )
+      : null,
+  );
+}
+
+function betFields(existing) {
+  const lastBet = lastRecordOf("bet");
+  return [
+    field("bettor", t("bettor"), memberSelect("f-bettor", "bettor", existing?.bettorId ?? "")),
+    field("holder", t("holder"), memberSelect("f-holder", "holder", existing?.holderId ?? lastBet?.holderId ?? "")),
+    field("stake", t("stake"), h("input", { id: "f-stake", name: "stake", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.stake) })),
+    h(
+      "fieldset",
+      { class: "choice-group price-helper" },
+      h("legend", { text: t("priceHelper") }),
+      chip("radio", "price-kind", "cents", t("priceCents"), true),
+      chip("radio", "price-kind", "odds", t("priceOdds"), false),
+      h("input", { id: "f-price", name: "price", inputmode: "decimal", autocomplete: "off", "aria-label": t("priceValue"), "aria-describedby": "price-note" }),
+      h("p", { class: "hint price-note", id: "price-note", "aria-live": "polite" }),
+    ),
+    field("payout", t("payout"), h("input", { id: "f-payout", name: "payout", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.payout) })),
+    h(
+      "fieldset",
+      { class: "choice-group" },
+      h("legend", { text: t("result") }),
+      chip("radio", "result", "win", t("resultWin"), existing?.result === "win"),
+      chip("radio", "result", "lose", t("resultLose"), existing?.result === "lose"),
+      chip("radio", "result", "cashout", t("resultCashout"), existing?.result === "cashout"),
+    ),
+    h(
+      "div",
+      { id: "cashout-field", hidden: existing?.result !== "cashout" },
+      field("cashout", t("cashoutAmount"), h("input", { id: "f-cashout", name: "cashout", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.cashout) })),
+    ),
+  ];
+}
+
+function splitFields(existing) {
+  // Ticked to start with: this split's people when editing, else the last
+  // split's, else everyone.
+  const lastSplit = lastRecordOf("split");
+  const included = new Set(existing?.participantIds ?? lastSplit?.participantIds ?? book.members.map((member) => member.id));
+  return [
+    field("payer", t("payer"), memberSelect("f-payer", "payer", existing?.payerId ?? "")),
+    field("amount", t("amount"), h("input", { id: "f-amount", name: "amount", inputmode: "decimal", autocomplete: "off", value: amountForInput(existing?.amount) })),
+    h(
+      "fieldset",
+      { class: "choice-group" },
+      h("legend", { text: t("participants") }),
+      book.members.map((member) => chip("checkbox", "participant", member.id, member.name, included.has(member.id))),
+    ),
+    h(
+      "fieldset",
+      { class: "choice-group" },
+      h("legend", { text: t("splitHow") }),
+      chip("radio", "splitMode", "equal", t("splitEqual"), !existing?.shares),
+      chip("radio", "splitMode", "custom", t("splitCustom"), Boolean(existing?.shares)),
+    ),
+    // One amount box per member; only the ticked people's boxes show.
+    h(
+      "div",
+      { id: "share-fields", hidden: !existing?.shares },
+      book.members.map((member) =>
+        h(
+          "div",
+          { class: "share-row", "data-member": member.id, hidden: !included.has(member.id) },
+          h("label", { for: `share-${member.id}`, text: member.name }),
+          h("input", {
+            id: `share-${member.id}`,
+            name: `share-${member.id}`,
+            inputmode: "decimal",
+            autocomplete: "off",
+            placeholder: "0",
+            value: amountForInput(existing?.shares?.[member.id]),
+          }),
+        ),
+      ),
+    ),
+  ];
 }
 
 function field(name, label, control) {
@@ -1466,23 +1518,12 @@ function renderTotals() {
 
 // The member chosen as "me" on More, or null if none (or they're gone).
 function meId() {
-  let id = null;
-  try {
-    id = window.localStorage.getItem(ME_KEY);
-  } catch {
-    // Storage can't be read: nobody is "me".
-  }
+  const id = deviceGet(ME_KEY);
   return book.members.some((member) => member.id === id) ? id : null;
 }
 
 function changeMe(id) {
-  try {
-    if (id) {
-      window.localStorage.setItem(ME_KEY, id);
-    } else {
-      window.localStorage.removeItem(ME_KEY);
-    }
-  } catch {
+  if (!deviceSet(ME_KEY, id || null)) {
     showToast(t("meNotKept"));
   }
 }
@@ -2153,18 +2194,13 @@ function currentTheme() {
 
 // Takes effect at once; it's kept for next time if storage allows.
 function changeTheme(theme) {
-  if (theme === "light" || theme === "dark") {
-    document.documentElement.dataset.theme = theme;
+  const chosen = theme === "light" || theme === "dark" ? theme : null;
+  if (chosen) {
+    document.documentElement.dataset.theme = chosen;
   } else {
     delete document.documentElement.dataset.theme;
   }
-  try {
-    if (theme === "light" || theme === "dark") {
-      window.localStorage.setItem(THEME_KEY, theme);
-    } else {
-      window.localStorage.removeItem(THEME_KEY);
-    }
-  } catch {
+  if (!deviceSet(THEME_KEY, chosen)) {
     showToast(t("themeNotKept"));
   }
 }
@@ -2196,14 +2232,8 @@ function downloadBackup() {
     showToast(t("backupFailed"));
     return;
   }
-  let timeKept = true;
-  try {
-    window.localStorage.setItem(BACKUP_RECORDS_KEY, recordsFingerprint(book.records));
-    window.localStorage.setItem(BACKUP_TIME_KEY, new Date().toISOString());
-  } catch {
-    // The download still started; only the time couldn't be kept.
-    timeKept = false;
-  }
+  // The download has started either way; only the time may not be kept.
+  const timeKept = deviceSet(BACKUP_RECORDS_KEY, recordsFingerprint(book.records)) && deviceSet(BACKUP_TIME_KEY, new Date().toISOString());
   const status = document.getElementById("backup-status");
   if (status) {
     status.textContent = backupStatusText();
@@ -2266,13 +2296,8 @@ function backupStatusText() {
 
 // When a backup download last started in this browser, or null if unknown.
 function lastBackupTime() {
-  try {
-    const started = new Date(window.localStorage.getItem(BACKUP_TIME_KEY) ?? "");
-    return Number.isNaN(started.getTime()) ? null : started;
-  } catch {
-    // Storage can't be read: the time is unknown.
-    return null;
-  }
+  const started = new Date(deviceGet(BACKUP_TIME_KEY) ?? "");
+  return Number.isNaN(started.getTime()) ? null : started;
 }
 
 // "today", "yesterday", "3 days ago", counted by calendar day.

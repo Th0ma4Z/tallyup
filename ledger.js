@@ -2,9 +2,9 @@
 // and settling up. No page code, so every rule can be tested on its own.
 
 export const STORAGE_KEY = "tallyup.v1";
-export const BACKUP_FORMAT = "tallyup-backup-1";
-export const RECORD_TYPES = ["card", "bet", "split", "payment"];
-export const BET_RESULTS = ["win", "lose", "cashout"];
+const BACKUP_FORMAT = "tallyup-backup-1";
+const RECORD_TYPES = ["card", "bet", "split", "payment"];
+const BET_RESULTS = ["win", "lose", "cashout"];
 
 export function emptyBook() {
   return { members: [], records: [], settings: { lang: "zh", currency: "CNY" }, rates: null };
@@ -289,7 +289,7 @@ export function cardTotal(amounts) {
   return roundMoney(Object.values(amounts).reduce((sum, amount) => sum + amount, 0));
 }
 
-export function isCurrencyCode(code) {
+function isCurrencyCode(code) {
   return typeof code === "string" && /^[A-Z]{3}$/.test(code);
 }
 
