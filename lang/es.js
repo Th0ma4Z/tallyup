@@ -35,6 +35,7 @@ export default {
   markedSettled: "Todo marcado como saldado.",
   undo: "Deshacer",
   undone: "Deshecho.",
+  undoSteps: "Se pueden deshacer {count} pasos",
   saved: "Guardado.",
 
   betSummary: "{bettor} con la cuenta de {holder} · apuesta {stake} · pago máximo {payout}",

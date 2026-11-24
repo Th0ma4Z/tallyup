@@ -35,6 +35,7 @@ export default {
   markedSettled: "Tout est marqué comme réglé.",
   undo: "Annuler",
   undone: "Annulé.",
+  undoSteps: "{count} actions peuvent être annulées",
   saved: "Enregistré.",
 
   betSummary: "{bettor}, compte : {holder} · mise {stake} · gain max {payout}",

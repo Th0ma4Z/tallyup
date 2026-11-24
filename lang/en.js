@@ -35,6 +35,7 @@ export default {
   markedSettled: "All marked as settled.",
   undo: "Undo",
   undone: "Undone.",
+  undoSteps: "{count} steps can be undone",
   saved: "Saved.",
 
   betSummary: "{bettor} on {holder}'s account · stake {stake} · max payout {payout}",

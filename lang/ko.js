@@ -35,6 +35,7 @@ export default {
   markedSettled: "모두 정산 완료로 표시했어요.",
   undo: "되돌리기",
   undone: "되돌렸어요.",
+  undoSteps: "{count}번 더 되돌릴 수 있어요",
   saved: "저장했어요.",
 
   betSummary: "{bettor}님이 {holder}님 계정으로 · 원금 {stake} · 최대 지급액 {payout}",

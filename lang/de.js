@@ -35,6 +35,7 @@ export default {
   markedSettled: "Alles als beglichen markiert.",
   undo: "Rückgängig",
   undone: "Rückgängig gemacht.",
+  undoSteps: "{count} Schritte können rückgängig gemacht werden",
   saved: "Gespeichert.",
 
   betSummary: "{bettor} mit dem Konto von {holder} · Einsatz {stake} · max. Auszahlung {payout}",

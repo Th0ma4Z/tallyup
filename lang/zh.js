@@ -35,6 +35,7 @@ export default {
   markedSettled: "已全部标记为结清。",
   undo: "撤销",
   undone: "已撤销。",
+  undoSteps: "还可以撤销 {count} 步",
   saved: "已保存。",
 
   betSummary: "{bettor} 用 {holder} 的账户 · 本金 {stake} · 最高赔付 {payout}",

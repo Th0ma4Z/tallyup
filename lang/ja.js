@@ -35,6 +35,7 @@ export default {
   markedSettled: "すべて精算済みにしました。",
   undo: "元に戻す",
   undone: "元に戻しました。",
+  undoSteps: "あと {count} 回元に戻せます",
   saved: "保存しました。",
 
   betSummary: "{bettor}が{holder}のアカウントで · 賭け金 {stake} · 最大払い戻し {payout}",

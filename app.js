@@ -46,6 +46,8 @@ const ME_KEY = "tallyup.me";
 // Colours for the circle before each name: white initials stay readable
 // (5:1 or more) on every one. Given in the order people were added, so the
 // first eight all differ and a rename keeps the colour.
+// How many changes Undo can go back.
+const UNDO_LIMIT = 10;
 const AVATAR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#b45309", "#00695c", "#ad1457", "#6d4c41"];
 const RATES_URL = "https://api.frankfurter.dev/v1/latest?from=EUR";
 // The currencies the exchange-rate service covers.
@@ -80,8 +82,9 @@ let search = null;
 let resultsRange = { from: "", to: "" };
 // The member whose history is open on the People tab, or null for the list.
 let viewingMemberId = null;
-// The state before the last delete, settle or restore, for Undo.
-let undo = null;
+// The book before each recent delete, settle or restore, newest last, for Undo.
+// Adding or editing clears it, since going back would also lose that change.
+let undoSteps = [];
 let editingRecord = null;
 let recordType = "card";
 let renamingId = null;
@@ -183,8 +186,9 @@ function isHomeScreenApp() {
 // ---------- Saving ----------
 
 // Saves the next version of the book. Refuses if another window changed it,
-// and keeps the previous version for Undo when undoMessage is given.
-function commit(nextBook, { message = null, undoMessage = null } = {}) {
+// and keeps the previous version for Undo when undoMessage is given. Any
+// other change clears Undo, unless keepUndo says it's safe to go back past it.
+function commit(nextBook, { message = null, undoMessage = null, keepUndo = false } = {}) {
   if (stale) {
     render();
     return false;
@@ -213,7 +217,11 @@ function commit(nextBook, { message = null, undoMessage = null } = {}) {
   book = nextBook;
   savedText = text;
   banner.hidden = true;
-  undo = undoMessage ? { message: undoMessage, book: previous } : null;
+  if (undoMessage) {
+    undoSteps = [...undoSteps, { message: undoMessage, book: previous }].slice(-UNDO_LIMIT);
+  } else if (!keepUndo) {
+    undoSteps = [];
+  }
   render();
   if (message) {
     showToast(message);
@@ -411,22 +419,34 @@ function render() {
 }
 
 function renderUndo() {
-  if (!undo) {
+  const latest = undoSteps.at(-1);
+  if (!latest) {
     return null;
   }
   return h(
     "div",
     { class: "card undo-bar", role: "status" },
-    h("p", { text: undo.message }),
+    h(
+      "div",
+      {},
+      h("p", { text: latest.message }),
+      undoSteps.length > 1 ? h("p", { class: "muted", id: "undo-count", text: t("undoSteps", { count: undoSteps.length }) }) : null,
+    ),
     h("button", { type: "button", class: "button-secondary", id: "undo-button", text: t("undo"), onclick: undoLast }),
   );
 }
 
+// Goes back one step. The settings stay as they are now.
 function undoLast() {
-  const previous = undo.book;
-  undo = null;
-  commit({ ...previous, settings: book.settings }, { message: t("undone") });
-  view.focus();
+  const latest = undoSteps.at(-1);
+  undoSteps = undoSteps.slice(0, -1);
+  if (!commit({ ...latest.book, settings: book.settings }, { message: t("undone"), keepUndo: true })) {
+    undoSteps = [...undoSteps, latest];
+    render();
+    return;
+  }
+  // With more to undo, stay on the button so it can be pressed again.
+  (document.getElementById("undo-button") ?? view).focus();
 }
 
 // ----- Records tab -----
@@ -2206,7 +2226,8 @@ function changeTheme(theme) {
 }
 
 function changeSetting(changes, focusId) {
-  if (commit({ ...book, settings: { ...book.settings, ...changes } })) {
+  // Undo keeps the current settings, so changing one doesn't clear it.
+  if (commit({ ...book, settings: { ...book.settings, ...changes } }, { keepUndo: true })) {
     document.getElementById(focusId)?.focus();
   }
 }

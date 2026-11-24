@@ -35,6 +35,7 @@ export default {
   markedSettled: "已全部標記為結清。",
   undo: "復原",
   undone: "已復原。",
+  undoSteps: "還可以復原 {count} 步",
   saved: "已儲存。",
 
   betSummary: "{bettor} 用 {holder} 的帳戶 · 本金 {stake} · 最高賠付 {payout}",
