@@ -9,6 +9,7 @@ import {
   csvText,
   equalShareRange,
   filterRecords,
+  isPending,
   isRealDate,
   loadBook,
   localDateKey,
@@ -766,8 +767,11 @@ function renderRecord(record, { showDate = false } = {}) {
         }),
       }),
     );
-    const result = betResult(record);
-    body.push(h("p", {}, h("span", { text: `${resultText(record)} · ` }), h("span", { class: amountClass(result), text: signedMoney(result, record.currency) })));
+    // A bet waiting for its result has the badge above instead of a result line.
+    if (!isPending(record)) {
+      const result = betResult(record);
+      body.push(h("p", {}, h("span", { text: `${resultText(record)} · ` }), h("span", { class: amountClass(result), text: signedMoney(result, record.currency) })));
+    }
     body.push(h("p", { class: "transfer", text: betTransferText(record) }));
   } else if (record.type === "payment") {
     body.push(h("p", { text: t("paymentSummary", { from: nameOf(record.fromId), to: nameOf(record.toId), amount: money(record.amount, record.currency) }) }));
@@ -808,6 +812,7 @@ function renderRecord(record, { showDate = false } = {}) {
       h("span", { class: "badge badge-type", text: typeName(record.type) }),
       record.currency !== book.settings.currency ? h("span", { class: "badge badge-muted", text: record.currency }) : null,
       record.settled ? h("span", { class: "badge badge-muted", text: t("settledBadge") }) : null,
+      isPending(record) ? h("span", { class: "badge badge-muted", text: t("resultPending") }) : null,
     ),
     body,
     h(
@@ -816,13 +821,18 @@ function renderRecord(record, { showDate = false } = {}) {
       // A payment is made from the settle page, so it can be deleted but not edited.
       record.type === "payment"
         ? null
-        : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${typeName(record.type)}`, onclick: () => editRecord(record) }),
+        : isPending(record)
+          ? h("button", { type: "button", class: "button-secondary fill-result", text: t("fillResult"), "aria-label": `${t("fillResult")} ${typeName(record.type)}`, onclick: () => editRecord(record) })
+          : h("button", { type: "button", class: "button-secondary", text: t("edit"), "aria-label": `${t("edit")} ${typeName(record.type)}`, onclick: () => editRecord(record) }),
       h("button", { type: "button", class: "button-secondary button-danger", text: t("delete"), "aria-label": `${t("delete")} ${typeName(record.type)}`, onclick: () => deleteRecord(record) }),
     ),
   );
 }
 
 function resultText(record) {
+  if (isPending(record)) {
+    return t("resultPending");
+  }
   if (record.result === "win") {
     return t("resultWinShort");
   }
@@ -833,6 +843,9 @@ function resultText(record) {
 }
 
 function betTransferText(record) {
+  if (isPending(record)) {
+    return t("pendingTransfer");
+  }
   const result = betResult(record);
   if (record.bettorId === record.holderId) {
     return t("ownAccount", { result: signedMoney(result, record.currency) });
@@ -849,8 +862,14 @@ function betTransferText(record) {
 function editRecord(record) {
   if (record.settled) {
     settledWarning(record, "settledEditHelp", t("keepEditing"), () => openRecordDialog(record.type, record));
-  } else {
-    openRecordDialog(record.type, record);
+    return;
+  }
+  openRecordDialog(record.type, record);
+  if (isPending(record)) {
+    // "Fill in result": straight to the choices.
+    const choice = recordForm.querySelector('input[name="result"][value="win"]');
+    choice?.scrollIntoView({ block: "center" });
+    choice?.focus();
   }
 }
 
@@ -1119,6 +1138,8 @@ function betFields(existing) {
       "fieldset",
       { class: "choice-group" },
       h("legend", { text: t("result") }),
+      // A new bet starts waiting for its result; it's filled in after the game.
+      chip("radio", "result", "pending", t("resultPending"), !existing || existing.result === "pending"),
       chip("radio", "result", "win", t("resultWin"), existing?.result === "win"),
       chip("radio", "result", "lose", t("resultLose"), existing?.result === "lose"),
       chip("radio", "result", "cashout", t("resultCashout"), existing?.result === "cashout"),
@@ -1559,6 +1580,9 @@ function changeMe(id) {
 function renderSettle() {
   const currency = book.settings.currency;
   const unsettled = book.records.filter((record) => !record.settled);
+  // Bets waiting for a result count for nothing yet and stay open.
+  const waiting = unsettled.filter(isPending).length;
+  const settleable = unsettled.length - waiting;
   const { balances, transfers: planned, missing } = settlementPlan(book.records, currency, rates);
   // "Me" first: my own transfers lead, the rest keep their order.
   const me = meId();
@@ -1584,6 +1608,7 @@ function renderSettle() {
       h("h2", { id: "settle-heading", text: t("settleTitle") }),
       h("p", { class: "hint", text: t("settleNote", { currency }) }),
       missingNote(missing),
+      waiting ? h("p", { class: "hint", id: "pending-note", text: t("pendingBets", { n: waiting }) }) : null,
       transfers.length ? h("p", { class: "hint", text: t("paidHint") }) : null,
       transfers.length
         ? h(
@@ -1623,7 +1648,7 @@ function renderSettle() {
         "div",
         { class: "form-actions" },
         h("button", { type: "button", class: "button-primary", id: "share-button", text: t("share"), onclick: () => shareSettlement(transfers) }),
-        unsettled.length ? h("button", { type: "button", class: "button-secondary", id: "settle-all", text: t("markSettled"), onclick: () => markAllSettled(missing) }) : null,
+        settleable ? h("button", { type: "button", class: "button-secondary", id: "settle-all", text: t("markSettled"), onclick: () => markAllSettled(missing) }) : null,
       ),
       h("p", { class: "form-error", id: "settle-error", role: "alert", hidden: true }),
       h("div", { id: "share-fallback" }),
@@ -1744,7 +1769,7 @@ function recordContent(record) {
     }
   } else if (record.type === "bet") {
     const summary = t("betSummary", { bettor: nameOf(record.bettorId), holder: nameOf(record.holderId), stake: amountOf(record.stake), payout: amountOf(record.payout) });
-    text = `${summary} · ${resultText(record)} ${signedMoney(betResult(record), record.currency)}`;
+    text = isPending(record) ? `${summary} · ${resultText(record)}` : `${summary} · ${resultText(record)} ${signedMoney(betResult(record), record.currency)}`;
   } else if (record.type === "payment") {
     text = t("paymentSummary", { from: nameOf(record.fromId), to: nameOf(record.toId), amount: amountOf(record.amount) });
   } else if (record.shares) {
@@ -1841,7 +1866,7 @@ function markAllSettled(missing) {
     return;
   }
   const settledOn = localDateKey(new Date());
-  const records = book.records.map((record) => (record.settled ? record : { ...record, settled: true, settledOn }));
+  const records = book.records.map((record) => (record.settled || isPending(record) ? record : { ...record, settled: true, settledOn }));
   if (commit(withRecords(records), { undoMessage: t("markedSettled") })) {
     document.getElementById("undo-button")?.focus();
   }
@@ -2018,6 +2043,10 @@ function personLine(record, id) {
     return { text: t("typeCard"), amount: record.amounts[id], isResult: true };
   }
   if (record.type === "bet") {
+    if (isPending(record)) {
+      const text = record.bettorId === id ? t("personBet", { holder: nameOf(record.holderId) }) : t("personHolder", { bettor: nameOf(record.bettorId) });
+      return { text: `${text} · ${resultText(record)}`, amount: null };
+    }
     if (record.bettorId === id) {
       const text = record.holderId === id ? t("personBetOwn") : t("personBet", { holder: nameOf(record.holderId) });
       return { text, amount: betResult(record), isResult: true };

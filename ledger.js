@@ -4,7 +4,8 @@
 export const STORAGE_KEY = "tallyup.v1";
 const BACKUP_FORMAT = "tallyup-backup-1";
 const RECORD_TYPES = ["card", "bet", "split", "payment"];
-const BET_RESULTS = ["win", "lose", "cashout"];
+// "pending": recorded before the game, the result is filled in later.
+const BET_RESULTS = ["pending", "win", "lose", "cashout"];
 
 export function emptyBook() {
   return { members: [], records: [], settings: { lang: "zh", currency: "CNY" }, rates: null };
@@ -76,8 +77,11 @@ export function localDateKey(date) {
 // What one bet means for the person who placed it. The max payout includes
 // the stake (Thomas, 2026-11-11), so a win gains the payout minus the stake,
 // a loss loses the stake, and a cash out gains (or loses) the cash-out amount
-// minus the stake.
+// minus the stake. A bet still waiting for its result is worth 0 so far.
 export function betResult({ stake, payout, result, cashout }) {
+  if (result === "pending") {
+    return 0;
+  }
   if (result === "win") {
     return roundMoney(payout - stake);
   }
@@ -87,14 +91,19 @@ export function betResult({ stake, payout, result, cashout }) {
   return roundMoney(cashout - stake);
 }
 
+// Whether a record is a bet still waiting for its result.
+export function isPending(record) {
+  return record.type === "bet" && record.result === "pending";
+}
+
 // Each member's win (+) or loss (-) from one record, in the record's
 // currency. An AA split is spending and a payment is paying back, not
-// winning, so neither counts for anybody.
+// winning, so neither counts for anybody; nor does a bet waiting for its result.
 export function recordWinnings(record) {
   if (record.type === "card") {
     return { ...record.amounts };
   }
-  if (record.type === "bet") {
+  if (record.type === "bet" && !isPending(record)) {
     return { [record.bettorId]: betResult(record) };
   }
   return {};
@@ -103,13 +112,13 @@ export function recordWinnings(record) {
 // What each member should receive (+) or pay (-) because of one record.
 // Bets are settled afterwards between the bettor and the account holder: the
 // holder pays out a gain and collects a loss. A bet on the holder's own
-// account needs no transfer.
+// account needs no transfer, and one waiting for its result none yet.
 export function recordBalances(record) {
   if (record.type === "card") {
     return { ...record.amounts };
   }
   if (record.type === "bet") {
-    if (record.bettorId === record.holderId) {
+    if (record.bettorId === record.holderId || isPending(record)) {
       return {};
     }
     const result = betResult(record);
@@ -442,7 +451,8 @@ export function csvText(rows) {
 // One member's record at cards and bets. games and wins count card games
 // they played (a 0 is played, not won); best and worst are their biggest
 // card win and loss, compared in the main currency (null if none). bets and
-// betWins count bets they placed themselves; a cash-out above the stake wins.
+// betWins count bets they placed themselves and that have a result; a
+// cash-out above the stake wins.
 export function memberStats(records, memberId, currency, rates) {
   const stats = { games: 0, wins: 0, best: null, worst: null, bets: 0, betWins: 0 };
   for (const record of records) {
@@ -460,7 +470,7 @@ export function memberStats(records, memberId, currency, rates) {
       if (amount < 0 && (!stats.worst || value < stats.worst.value)) {
         stats.worst = { record, amount, value };
       }
-    } else if (record.type === "bet" && record.bettorId === memberId) {
+    } else if (record.type === "bet" && record.bettorId === memberId && !isPending(record)) {
       stats.bets += 1;
       stats.betWins += betResult(record) > 0 ? 1 : 0;
     }
