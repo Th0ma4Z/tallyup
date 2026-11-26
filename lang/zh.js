@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name} 已经出现在记录里，不能删除。可以改名。",
   memberDeleteConfirm: "删除 {name}？",
   memberAdded: "已添加 {name}。",
+  memberDeleted: "已删除 {name}。",
 
   language: "语言",
   appearance: "外观",

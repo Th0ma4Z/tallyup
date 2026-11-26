@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name} is in some records, so they can't be deleted. You can rename them.",
   memberDeleteConfirm: "Delete {name}?",
   memberAdded: "Added {name}.",
+  memberDeleted: "Deleted {name}.",
 
   language: "Language",
   appearance: "Appearance",

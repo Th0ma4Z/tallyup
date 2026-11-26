@@ -10,9 +10,12 @@ export function emptyBook() {
   return { members: [], records: [], settings: { lang: "zh", currency: "CNY" }, rates: null };
 }
 
-// Rounds to cents, so 0.1 + 0.2 shows as 0.3.
+// Rounds to cents, so 0.1 + 0.2 shows as 0.3. A half cent rounds away from
+// zero either way (0.125 is 0.13 and -0.125 is -0.13), so a win and the same
+// loss stay equal; Math.round alone would make -0.125 into -0.12. Never -0.
 export function roundMoney(amount) {
-  return Math.round((amount + Number.EPSILON) * 100) / 100;
+  const cents = Math.round((Math.abs(amount) + Number.EPSILON) * 100);
+  return amount < 0 && cents ? -cents / 100 : cents / 100;
 }
 
 // Reads what someone typed as an amount, or NaN if it isn't one. Accepts
@@ -132,8 +135,8 @@ export function recordBalances(record) {
     }
     return balances;
   }
-  // Equal shares: a cent left over (100 three ways) goes to the payer first,
-  // so the others pay exactly the share shown.
+  // Equal shares: cents left over go one each to the payer first, then in
+  // order, so ¥100 three ways is 33.34 for the payer and 33.33 for the others.
   const people = [...record.participantIds].sort((a, b) => (b === record.payerId) - (a === record.payerId));
   const baseShare = Math.floor(cents / people.length);
   let leftover = cents - baseShare * people.length;
@@ -147,6 +150,16 @@ export function recordBalances(record) {
     balances[id] = balances[id] / 100;
   }
   return balances;
+}
+
+// The smallest and largest share in an equal AA split, as recordBalances
+// works them out: [30, 30] for ¥90 three ways, [66.66, 66.67] for ¥200,
+// where the cents left over go one each to the payer first.
+export function equalShareRange(record) {
+  const cents = Math.round(record.amount * 100);
+  const base = Math.floor(cents / record.participantIds.length);
+  const extra = cents % record.participantIds.length ? 1 : 0;
+  return [base / 100, (base + extra) / 100];
 }
 
 // rates: { base: "EUR", rates: { USD: 1.08, CNY: 7.7, ... } }, meaning

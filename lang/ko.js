@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name}님은 기록에 나와서 삭제할 수 없어요. 이름은 바꿀 수 있어요.",
   memberDeleteConfirm: "{name}님을 삭제할까요?",
   memberAdded: "{name}님을 추가했어요.",
+  memberDeleted: "{name}님을 삭제했어요.",
 
   language: "언어",
   appearance: "화면 모드",

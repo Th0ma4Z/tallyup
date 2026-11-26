@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name} は記録に含まれているので削除できません。名前は変更できます。",
   memberDeleteConfirm: "{name} を削除しますか？",
   memberAdded: "{name} を追加しました。",
+  memberDeleted: "{name} を削除しました。",
 
   language: "言語",
   appearance: "外観",

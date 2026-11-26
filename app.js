@@ -7,6 +7,7 @@ import {
   commonAmounts,
   convert,
   csvText,
+  equalShareRange,
   filterRecords,
   isRealDate,
   loadBook,
@@ -43,11 +44,11 @@ const THEME_LABELS = { system: "themeSystem", light: "themeLight", dark: "themeD
 // Which member is "me" on this device, for the settle page. Per device, since
 // each phone belongs to a different person.
 const ME_KEY = "tallyup.me";
+// How many changes Undo can go back.
+const UNDO_LIMIT = 10;
 // Colours for the circle before each name: white initials stay readable
 // (5:1 or more) on every one. Given in the order people were added, so the
 // first eight all differ and a rename keeps the colour.
-// How many changes Undo can go back.
-const UNDO_LIMIT = 10;
 const AVATAR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#b45309", "#00695c", "#ad1457", "#6d4c41"];
 const RATES_URL = "https://api.frankfurter.dev/v1/latest?from=EUR";
 // The currencies the exchange-rate service covers.
@@ -279,6 +280,13 @@ function signedMoney(amount, currency = book.settings.currency) {
 }
 
 // An amount as it goes back into a form field, in this language's format: 12,5 in Spanish.
+// Each person's share of an equal AA: "¥30.00", or "¥66.66–¥66.67" when the
+// cents don't divide evenly and some pay a cent more.
+function equalShareText(record) {
+  const [smallest, largest] = equalShareRange(record);
+  return smallest === largest ? money(smallest, record.currency) : `${money(smallest, record.currency)}–${money(largest, record.currency)}`;
+}
+
 function amountForInput(amount) {
   return amount === undefined ? "" : String(amount).replace(".", decimalMark());
 }
@@ -637,7 +645,6 @@ function goToRestore() {
   restoreInput.focus();
 }
 
-// A list of names with signed amounts in the main currency, biggest win first.
 // A coloured circle with the name's first letter. The letter comes from CSS,
 // so screen readers and copied text get the name only once.
 function avatar(memberId) {
@@ -652,6 +659,7 @@ function avatar(memberId) {
   });
 }
 
+// A list of names with signed amounts in the main currency, biggest win first.
 function amountList(totals, emptyText) {
   const entries = Object.entries(totals).filter(([, amount]) => Math.abs(amount) >= 0.005);
   if (!entries.length) {
@@ -781,7 +789,7 @@ function renderRecord(record, { showDate = false } = {}) {
           payer: nameOf(record.payerId),
           amount: money(record.amount, record.currency),
           n: record.participantIds.length,
-          share: money(roundMoney(record.amount / record.participantIds.length), record.currency),
+          share: equalShareText(record),
         }),
       }),
     );
@@ -1245,7 +1253,6 @@ function recordFromForm() {
   return record;
 }
 
-// The line under the form that says what the record means before saving.
 // Bet form: a Kalshi price in cents (stake ÷ price) or decimal odds
 // (stake × odds) fills in the max payout, with a line saying how.
 function applyBetPrice() {
@@ -1377,6 +1384,7 @@ function fillLastPlayer() {
   document.getElementById("record-save").focus();
 }
 
+// The line under the form that says what the record means before saving.
 function updateLivePreview() {
   const note = document.getElementById("live-note");
   if (!note) {
@@ -1426,7 +1434,7 @@ function updateLivePreview() {
           payer: record.payerId ? nameOf(record.payerId) : "?",
           amount: money(record.amount, record.currency),
           n: record.participantIds.length,
-          share: money(roundMoney(record.amount / record.participantIds.length), record.currency),
+          share: equalShareText(record),
         })}`
       : "";
   }
@@ -1743,7 +1751,7 @@ function recordContent(record) {
     const shares = Object.entries(record.shares).map(([id, share]) => `${nameOf(id)} ${amountOf(share)}`);
     text = `${t("splitCustomSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount) })} (${shares.join(t("listSeparator"))})`;
   } else {
-    text = t("splitSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount), n: record.participantIds.length, share: amountOf(roundMoney(record.amount / record.participantIds.length)) });
+    text = t("splitSummary", { payer: nameOf(record.payerId), amount: amountOf(record.amount), n: record.participantIds.length, share: equalShareText(record) });
   }
   return text;
 }
@@ -2105,7 +2113,7 @@ function deleteMember(member) {
   if (!window.confirm(t("memberDeleteConfirm", { name: member.name }))) {
     return;
   }
-  if (commit({ ...book, members: book.members.filter((other) => other.id !== member.id) }, { undoMessage: t("deleted") })) {
+  if (commit({ ...book, members: book.members.filter((other) => other.id !== member.id) }, { undoMessage: t("memberDeleted", { name: member.name }) })) {
     document.getElementById("undo-button")?.focus();
   }
 }
@@ -2232,9 +2240,6 @@ function changeSetting(changes, focusId) {
   }
 }
 
-// The time is recorded only once the file was made and its download started.
-// Browsers don't tell a page whether the file was then saved, so the status
-// says "download started", never "saved".
 // Hands the browser a file to download. Throws if the file can't be made.
 function saveFile(name, text, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -2245,6 +2250,9 @@ function saveFile(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+// The time is recorded only once the file was made and its download started.
+// Browsers don't tell a page whether the file was then saved, so the status
+// says "download started", never "saved".
 function downloadBackup() {
   const file = `tallyup-backup-${localDateKey(new Date())}.json`;
   try {

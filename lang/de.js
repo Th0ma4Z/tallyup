@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name} kommt in Einträgen vor und kann nicht gelöscht werden. Du kannst den Namen ändern.",
   memberDeleteConfirm: "{name} löschen?",
   memberAdded: "{name} hinzugefügt.",
+  memberDeleted: "{name} gelöscht.",
 
   language: "Sprache",
   appearance: "Darstellung",

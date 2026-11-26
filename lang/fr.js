@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name} apparaît dans des entrées, donc impossible de supprimer. Tu peux renommer.",
   memberDeleteConfirm: "Supprimer {name} ?",
   memberAdded: "{name} fait maintenant partie du groupe.",
+  memberDeleted: "{name} ne fait plus partie du groupe.",
 
   language: "Langue",
   appearance: "Apparence",

@@ -229,6 +229,7 @@ export default {
   cantDelete: "{name} aparece en algunos registros, así que no se puede borrar. Puedes cambiarle el nombre.",
   memberDeleteConfirm: "¿Borrar a {name}?",
   memberAdded: "{name} añadido.",
+  memberDeleted: "Se borró a {name}.",
 
   language: "Idioma",
   appearance: "Apariencia",
